@@ -2,9 +2,10 @@ import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { UserAnalysis, StyleRecommendation, AnalysisMode, Store, StylePreferences, ShoppingProduct } from "../types";
 
 // --- DEMO MODE CONFIGURATION ---
-// Set to TRUE to use static mock data (no API costs, stable demo).
-// Set to FALSE to use real Gemini AI.
 export const IS_DEMO_MODE = false; 
+
+// Cache the key in memory so we don't hit the server on every request
+let cachedApiKey: string | null = null;
 
 // Helper to remove data URL prefix for API calls
 const cleanBase64 = (base64: string) => base64.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, '');
@@ -15,17 +16,15 @@ const getMimeType = (base64: string) => {
   return match ? match[1] : 'image/jpeg';
 };
 
-// Helper to safely parse JSON with aggressive cleaning
+// Helper to safely parse JSON
 const parseJSON = (text: string) => {
   try {
     let cleaned = text.replace(/```json\n?|```/g, '').trim();
     if (cleaned.startsWith('json')) cleaned = cleaned.substring(4).trim();
     
-    // Find the first { or [
     const firstOpen = cleaned.search(/[\{\[]/);
     if (firstOpen === -1) throw new Error("No JSON object found");
     
-    // Find the last } or ]
     const lastCloseCurly = cleaned.lastIndexOf('}');
     const lastCloseSquare = cleaned.lastIndexOf(']');
     const lastClose = Math.max(lastCloseCurly, lastCloseSquare);
@@ -35,7 +34,6 @@ const parseJSON = (text: string) => {
     }
 
     try { return JSON.parse(cleaned); } catch (e) {
-        // Simple manual fix for common JSON issues if standard parse fails
         let fixed = '';
         let inQuotes = false;
         let isEscaped = false;
@@ -59,21 +57,26 @@ const parseJSON = (text: string) => {
   }
 };
 
-// Access API Key logic:
-// 1. Check LocalStorage override (Manual fix via Admin Panel)
-// 2. Check Vite Env Vars (import.meta.env.VITE_API_KEY)
-// 3. Check Standard React Env Vars (process.env.REACT_APP_API_KEY)
-export const getApiKey = () => {
-    // 1. Manual Override from Admin Panel (Immediate fix)
-    // Safe from Google Scanners because it lives in user's browser storage, not in code repo.
+/**
+ * ROBUST API KEY RETRIEVAL STRATEGY
+ * 1. Check Memory Cache
+ * 2. Check LocalStorage (Admin Override)
+ * 3. Check Vite Env Vars (Build time)
+ * 4. Check Server Endpoint (Runtime fallback)
+ */
+export const getOrFetchApiKey = async (): Promise<string | null> => {
+    // 1. Memory Cache
+    if (cachedApiKey) return cachedApiKey;
+
+    // 2. LocalStorage (Admin/Manual Fix)
     const localKey = localStorage.getItem('stylevision_api_key_override');
     if (localKey && localKey.startsWith('AIza')) {
+        cachedApiKey = localKey;
         return localKey;
     }
 
+    // 3. Vite Environment Variables
     let envKey = undefined;
-
-    // 2. Try Vite (modern)
     try {
         // @ts-ignore
         if (typeof import.meta !== 'undefined' && import.meta.env) {
@@ -82,20 +85,40 @@ export const getApiKey = () => {
         }
     } catch (e) {}
 
-    // 3. Try React/Node (legacy/standard)
+    // Check standard process.env just in case
     if (!envKey && typeof process !== 'undefined' && process.env) {
         envKey = process.env.REACT_APP_API_KEY || process.env.API_KEY;
     }
-    
-    // Block the known leaked key if it accidentally remains
-    if (envKey && envKey.includes("AIzaSyDS7WO")) {
-        return null;
+
+    if (envKey && !envKey.includes("AIzaSyDS7WO")) {
+        cachedApiKey = envKey;
+        return envKey;
     }
-    
-    return envKey || null;
+
+    // 4. Server Fallback (The Fix for Vercel)
+    try {
+        console.log("Fetching API Key from server...");
+        const response = await fetch('/api/get-key');
+        if (response.ok) {
+            const data = await response.json();
+            if (data.key) {
+                cachedApiKey = data.key;
+                return data.key;
+            }
+        }
+    } catch (e) {
+        console.error("Failed to fetch key from server:", e);
+    }
+
+    return null;
 };
 
-// SAFETY SETTINGS: Disable blocks to allow analyzing human photos
+// For synchronous checks (e.g. UI status), we only check what we have instantly
+export const getApiKeySync = () => {
+    return cachedApiKey || localStorage.getItem('stylevision_api_key_override');
+}
+
+// SAFETY SETTINGS
 const SAFETY_SETTINGS = [
   { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
   { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
@@ -107,7 +130,6 @@ const SAFETY_SETTINGS = [
  * Analyzes the user's photo using Gemini (Vision)
  */
 export const analyzeUserImage = async (base64Image: string, mode: AnalysisMode = 'STANDARD'): Promise<UserAnalysis> => {
-  
   if (IS_DEMO_MODE) {
     await new Promise(resolve => setTimeout(resolve, 2000));
     return {
@@ -119,13 +141,12 @@ export const analyzeUserImage = async (base64Image: string, mode: AnalysisMode =
     };
   }
 
-  const apiKey = getApiKey();
-  if (!apiKey) throw new Error("API Key не настроен. Зайдите в Админ-панель -> Система и введите ключ вручную (это безопасно) или добавьте VITE_API_KEY в Vercel.");
+  const apiKey = await getOrFetchApiKey();
+  if (!apiKey) throw new Error("Системная ошибка: API Key не найден ни в браузере, ни на сервере.");
 
   const ai = new GoogleGenAI({ apiKey });
   
   let promptInstructions = "";
-
   if (mode === 'OBJECTIVE') {
     promptInstructions = `
       ROLE: Elite High-Fashion Stylist.
@@ -148,15 +169,12 @@ export const analyzeUserImage = async (base64Image: string, mode: AnalysisMode =
     Return JSON: gender, bodyType, seasonalColor, styleKeywords (array), detailedDescription.
   `;
 
-  const mimeType = getMimeType(base64Image);
-
   try {
-    // USING GEMINI-3-FLASH-PREVIEW for best performance/cost ratio
     const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview', 
         contents: {
           parts: [
-              { inlineData: { mimeType: mimeType, data: cleanBase64(base64Image) } },
+              { inlineData: { mimeType: getMimeType(base64Image), data: cleanBase64(base64Image) } },
               { text: prompt }
           ]
         },
@@ -177,16 +195,10 @@ export const analyzeUserImage = async (base64Image: string, mode: AnalysisMode =
         }
     });
 
-    if (response.text) {
-        return parseJSON(response.text) as UserAnalysis;
-    }
-    
-    console.warn("Empty response. Finish reason:", response.candidates?.[0]?.finishReason);
-    throw new Error(`Пустой ответ от ИИ. Причина: ${response.candidates?.[0]?.finishReason || 'Неизвестно'}`);
-
+    if (response.text) return parseJSON(response.text) as UserAnalysis;
+    throw new Error(`Пустой ответ от ИИ.`);
   } catch (error: any) {
     console.error("Gemini Analyze Error:", error);
-    // Propagate the REAL error message to the UI
     throw new Error(`Ошибка AI: ${error.message || error.toString()}`);
   }
 };
@@ -202,10 +214,10 @@ export const getStyleRecommendations = async (
 
   if (IS_DEMO_MODE) {
     await new Promise(resolve => setTimeout(resolve, 2500));
-    return []; // Demo data handling is in App.tsx fallback usually, or here
+    return [];
   }
 
-  const apiKey = getApiKey();
+  const apiKey = await getOrFetchApiKey();
   if (!apiKey) throw new Error("API Key missing");
   
   const ai = new GoogleGenAI({ apiKey });
@@ -223,7 +235,6 @@ export const getStyleRecommendations = async (
     IMPORTANT: Provide a creative 'title' for each look in Russian.
   `;
 
-  // Define schema to guarantee title existence
   const schema: Schema = {
     type: Type.ARRAY,
     items: {
@@ -277,7 +288,7 @@ export const getStyleRecommendations = async (
 export const findShoppingProducts = async (itemQuery: string): Promise<ShoppingProduct[]> => {
   if (IS_DEMO_MODE) return [];
 
-  const apiKey = getApiKey();
+  const apiKey = await getOrFetchApiKey();
   if (!apiKey) return [];
 
   const ai = new GoogleGenAI({ apiKey });
@@ -302,7 +313,6 @@ export const findShoppingProducts = async (itemQuery: string): Promise<ShoppingP
       }
       return [];
   } catch (error) {
-      console.error("Product Search Error", error);
       return [];
   }
 };
@@ -314,7 +324,7 @@ export const findShoppingProducts = async (itemQuery: string): Promise<ShoppingP
 export const editUserImage = async (base64Image: string, textPrompt: string, maskImage?: string): Promise<string> => {
   if (IS_DEMO_MODE) return base64Image;
 
-  const apiKey = getApiKey();
+  const apiKey = await getOrFetchApiKey();
   if (!apiKey) throw new Error("API Key missing");
 
   const ai = new GoogleGenAI({ apiKey });

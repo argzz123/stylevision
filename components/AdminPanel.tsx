@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { storageService } from '../services/storageService';
-import { getApiKey } from '../services/geminiService'; // Ensure we import the key getter
+import { getOrFetchApiKey, getApiKeySync } from '../services/geminiService';
 
 interface AdminPanelProps {
   onClose: () => void;
@@ -14,13 +14,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, currentUserId }) => {
   const [apiLatency, setApiLatency] = useState<number>(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  
-  // Manual Key Management
   const [manualKey, setManualKey] = useState('');
 
   useEffect(() => {
     loadUsers();
-    // Load existing override if present
     const existingOverride = localStorage.getItem('stylevision_api_key_override');
     if (existingOverride) setManualKey(existingOverride);
   }, []);
@@ -35,7 +32,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, currentUserId }) => {
   const grantPro = async (targetId: number) => {
     if (window.confirm(`Выдать PRO подписку пользователю ID: ${targetId}?`)) {
         await storageService.setProStatus(targetId, true);
-        loadUsers(); // Refresh list
+        loadUsers();
         alert(`Подписка выдана пользователю ${targetId}`);
     }
   };
@@ -54,14 +51,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, currentUserId }) => {
           return;
       }
       localStorage.setItem('stylevision_api_key_override', manualKey.trim());
-      alert("Ключ сохранен БЕЗОПАСНО в браузере! Роботы Google не могут его увидеть здесь. Приложение теперь должно работать.");
-      testApiConnection();
+      alert("Ключ сохранен локально! Принудительная перезагрузка страницы...");
+      window.location.reload();
   };
 
   const handleClearKey = () => {
       localStorage.removeItem('stylevision_api_key_override');
       setManualKey('');
-      alert("Локальный ключ удален. Используется системный.");
+      alert("Локальный ключ удален.");
       testApiConnection();
   };
 
@@ -69,9 +66,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, currentUserId }) => {
      setApiStatus('UNKNOWN');
      const start = Date.now();
      try {
-         const key = getApiKey();
+         // This now tests the FULL chain: Local -> Env -> Server
+         const key = await getOrFetchApiKey();
          if (!key || key.includes('AIzaSyDS7WO')) throw new Error("API Key not found or invalid");
-         // Mock successful check if key format looks vaguely correct (AIza...)
          if (key.startsWith('AIza')) {
              setApiStatus('OK');
          } else {
@@ -91,8 +88,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, currentUserId }) => {
       (u.username && u.username.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
-  const currentKey = getApiKey();
-  const hasKey = currentKey && currentKey.length > 10;
+  const localKey = getApiKeySync();
   const isOverride = !!localStorage.getItem('stylevision_api_key_override');
 
   return (
@@ -107,7 +103,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, currentUserId }) => {
                     </div>
                     <div>
                         <h1 className="text-2xl font-bold text-white">Панель Администратора</h1>
-                        <p className="text-xs text-neutral-500">ID: {currentUserId} • Supabase DB Connected</p>
+                        <p className="text-xs text-neutral-500">ID: {currentUserId}</p>
                     </div>
                 </div>
                 <button onClick={onClose} className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 rounded text-sm text-white transition-colors">
@@ -196,33 +192,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, currentUserId }) => {
             {activeTab === 'SYSTEM' && (
                 <div className="animate-fade-in space-y-6">
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* API Key Override Card */}
-                        <div className="bg-neutral-900 border border-neutral-800 p-6 rounded-lg md:col-span-2">
-                             <h3 className="text-lg font-bold text-white mb-2">Настройка API Key (Hot Fix)</h3>
-                             <p className="text-xs text-neutral-500 mb-4">
-                                Если переменные окружения Vercel (<code>VITE_API_KEY</code>) еще не применились, введите ключ вручную здесь. 
-                                <br />
-                                <span className="text-green-500 font-bold">Это безопасно.</span> Ключ сохраняется только в вашем браузере, Google Scan его не увидит.
-                             </p>
-                             <div className="flex gap-2">
-                                 <input 
-                                    type="text" 
-                                    value={manualKey}
-                                    onChange={(e) => setManualKey(e.target.value)}
-                                    placeholder="Вставьте ключ (AIza...)"
-                                    className="flex-grow bg-black border border-neutral-700 rounded p-2 text-white text-sm font-mono focus:border-amber-500 outline-none"
-                                 />
-                                 <button onClick={handleSaveKey} className="bg-amber-600 text-black font-bold px-4 py-2 rounded text-sm hover:bg-amber-500">
-                                     Сохранить
-                                 </button>
-                                 {isOverride && (
-                                     <button onClick={handleClearKey} className="bg-red-900/30 text-red-500 border border-red-900 font-bold px-4 py-2 rounded text-sm hover:bg-red-900/50">
-                                         Сбросить
-                                     </button>
-                                 )}
-                             </div>
-                        </div>
-
+                        
                         {/* API Status Card */}
                         <div className="bg-neutral-900 border border-neutral-800 p-6 rounded-lg">
                             <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
@@ -240,29 +210,46 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, currentUserId }) => {
                             {apiLatency > 0 && <p className="text-xs text-neutral-500 mb-4">Latency: {apiLatency}ms</p>}
 
                             <button onClick={testApiConnection} className="w-full bg-neutral-800 hover:bg-neutral-700 text-white py-2 rounded transition-colors text-sm">
-                                Проверить соединение
+                                Проверить соединение (Server Fetch)
                             </button>
                         </div>
 
-                        {/* Environment Info */}
+                        {/* Local Key Override Card */}
                         <div className="bg-neutral-900 border border-neutral-800 p-6 rounded-lg">
-                             <h3 className="text-lg font-bold text-white mb-4">Окружение</h3>
-                             <div className="space-y-2 font-mono text-xs">
-                                 <div className="flex justify-between border-b border-neutral-800 pb-2">
-                                     <span className="text-neutral-500">Database</span>
-                                     <span className={process.env.REACT_APP_SUPABASE_URL ? "text-green-500" : "text-amber-500"}>
-                                         {process.env.REACT_APP_SUPABASE_URL ? 'Supabase' : 'Local Storage (Fallback)'}
-                                     </span>
+                             <h3 className="text-lg font-bold text-white mb-2">Локальный ключ (Admin)</h3>
+                             <p className="text-xs text-neutral-500 mb-4">
+                                Действует только для этого браузера. Если удалите - приложение попытается взять ключ с сервера Vercel.
+                             </p>
+                             <div className="flex gap-2">
+                                 <input 
+                                    type="text" 
+                                    value={manualKey}
+                                    onChange={(e) => setManualKey(e.target.value)}
+                                    placeholder="Ключ..."
+                                    className="flex-grow bg-black border border-neutral-700 rounded p-2 text-white text-sm font-mono focus:border-amber-500 outline-none"
+                                 />
+                                 <button onClick={handleSaveKey} className="bg-amber-600 text-black font-bold px-3 py-2 rounded text-sm hover:bg-amber-500">
+                                     Save
+                                 </button>
+                                 {isOverride && (
+                                     <button onClick={handleClearKey} className="bg-red-900/30 text-red-500 border border-red-900 font-bold px-3 py-2 rounded text-sm hover:bg-red-900/50">
+                                         X
+                                     </button>
+                                 )}
+                             </div>
+                        </div>
+
+                        {/* Debug Info */}
+                         <div className="bg-neutral-900 border border-neutral-800 p-6 rounded-lg md:col-span-2">
+                             <h3 className="text-lg font-bold text-white mb-4">Отладка доступа</h3>
+                             <div className="grid grid-cols-2 gap-4 text-xs font-mono">
+                                 <div className="p-3 bg-black rounded">
+                                     <span className="text-neutral-500 block">Local Storage (Browser)</span>
+                                     <span className={localKey ? "text-green-500" : "text-neutral-500"}>{localKey ? 'PRESENT' : 'EMPTY'}</span>
                                  </div>
-                                 <div className="flex justify-between border-b border-neutral-800 pb-2 pt-2">
-                                     <span className="text-neutral-500">API Key Configured</span>
-                                     <span className={hasKey ? "text-green-500" : "text-red-500"}>
-                                         {hasKey ? (isOverride ? 'YES (Manual Override)' : 'YES (Env Var)') : 'NO'}
-                                     </span>
-                                 </div>
-                                 <div className="flex justify-between pt-2">
-                                     <span className="text-neutral-500">Admin ID</span>
-                                     <span className="text-white">{currentUserId}</span>
+                                 <div className="p-3 bg-black rounded">
+                                     <span className="text-neutral-500 block">Server Environment (Vercel)</span>
+                                     <span className="text-blue-500">Check via "Проверить соединение"</span>
                                  </div>
                              </div>
                         </div>
