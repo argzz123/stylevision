@@ -285,9 +285,10 @@ const App: React.FC = () => {
       
       setActiveMobileTab('COLLECTION'); 
       setAppState(AppState.RESULTS);
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      alert('Ошибка анализа. Пожалуйста, попробуйте другое фото.');
+      // SHOW REAL ERROR MESSAGE TO USER
+      alert(error.message || 'Ошибка анализа.');
       setAppState(AppState.UPLOAD);
     } finally {
       setIsProcessing(false);

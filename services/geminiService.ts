@@ -20,11 +20,20 @@ const parseJSON = (text: string) => {
   try {
     let cleaned = text.replace(/```json\n?|```/g, '').trim();
     if (cleaned.startsWith('json')) cleaned = cleaned.substring(4).trim();
+    
+    // Find the first { or [
     const firstOpen = cleaned.search(/[\{\[]/);
+    if (firstOpen === -1) throw new Error("No JSON object found");
+    
+    // Find the last } or ]
     const lastCloseCurly = cleaned.lastIndexOf('}');
     const lastCloseSquare = cleaned.lastIndexOf(']');
     const lastClose = Math.max(lastCloseCurly, lastCloseSquare);
-    if (firstOpen !== -1 && lastClose !== -1) cleaned = cleaned.substring(firstOpen, lastClose + 1);
+    
+    if (lastClose !== -1) {
+        cleaned = cleaned.substring(firstOpen, lastClose + 1);
+    }
+
     try { return JSON.parse(cleaned); } catch (e) {
         // Simple manual fix for common JSON issues if standard parse fails
         let fixed = '';
@@ -53,27 +62,40 @@ const parseJSON = (text: string) => {
 // Access API Key supporting both local/node env and Vercel/React env
 // We include the hardcoded key as a final fallback to ensure it works on Vercel immediately
 const getApiKey = () => {
-    return process.env.REACT_APP_API_KEY || process.env.API_KEY || 'AIzaSyDS7WO-9BZnktWVJtr2pbdyaB8ptFgpr8s';
+    // Prioritize environment variables
+    const envKey = process.env.REACT_APP_API_KEY || process.env.API_KEY;
+    if (envKey && envKey.length > 10) return envKey;
+    
+    // Fallback key
+    return 'AIzaSyDS7WO-9BZnktWVJtr2pbdyaB8ptFgpr8s';
 };
 
+// SAFETY SETTINGS: Disable blocks to allow analyzing human photos
+const SAFETY_SETTINGS = [
+  { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+  { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+  { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+  { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+];
+
 /**
- * Analyzes the user's photo using Gemini 3 Pro (Vision)
+ * Analyzes the user's photo using Gemini (Vision)
  */
 export const analyzeUserImage = async (base64Image: string, mode: AnalysisMode = 'STANDARD'): Promise<UserAnalysis> => {
   
   if (IS_DEMO_MODE) {
-    await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate AI thinking time
+    await new Promise(resolve => setTimeout(resolve, 2000));
     return {
       gender: "Женский",
       bodyType: "Песочные часы",
       seasonalColor: "Глубокая Осень",
       styleKeywords: ["Элегантность", "Минимализм", "Статус", "Комфорт", "Тренд"],
-      detailedDescription: "[ДЕМО РЕЖИМ] Система анализа внешности. В реальной версии здесь производится расчет биометрических точек лица, определение подтона кожи и архитектуры тела. Сейчас загружен демонстрационный профиль 'Идеальный баланс', чтобы показать возможности интерфейса."
+      detailedDescription: "[ДЕМО] Демонстрационный режим."
     };
   }
 
   const apiKey = getApiKey();
-  if (!apiKey) throw new Error("API Key missing. Please set REACT_APP_API_KEY in Vercel.");
+  if (!apiKey) throw new Error("API Key missing.");
 
   const ai = new GoogleGenAI({ apiKey });
   
@@ -81,56 +103,67 @@ export const analyzeUserImage = async (base64Image: string, mode: AnalysisMode =
 
   if (mode === 'OBJECTIVE') {
     promptInstructions = `
-      ROLE: Elite High-Fashion Stylist & Image Consultant.
+      ROLE: Elite High-Fashion Stylist.
       MODE: OBJECTIVE, STRICT, CORRECTIVE.
       TASK: Analyze body proportions, face shape, and suggest corrections.
-      TONE: Professional, direct, honest, constructive (Russian language).
+      TONE: Professional, direct, honest (Russian language).
     `;
   } else {
     promptInstructions = `
-      ROLE: Personal Luxury Shopper & Stylist.
-      MODE: STANDARD, ENHANCING, STYLISH.
+      ROLE: Personal Luxury Shopper.
+      MODE: STANDARD, ENHANCING.
       TASK: Identify body type, season, and suggest enhancing styles.
-      TONE: Inspiring, helpful, sophisticated (Russian language).
+      TONE: Inspiring, helpful (Russian language).
     `;
   }
 
   const prompt = `
-    Analyze this photo of a person.
+    Analyze this photo.
     ${promptInstructions}
     Return JSON: gender, bodyType, seasonalColor, styleKeywords (array), detailedDescription.
   `;
 
   const mimeType = getMimeType(base64Image);
 
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-pro-preview',
-    contents: {
-      parts: [
-        { inlineData: { mimeType: mimeType, data: cleanBase64(base64Image) } },
-        { text: prompt }
-      ]
-    },
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          gender: { type: Type.STRING },
-          bodyType: { type: Type.STRING },
-          seasonalColor: { type: Type.STRING },
-          styleKeywords: { type: Type.ARRAY, items: { type: Type.STRING } },
-          detailedDescription: { type: Type.STRING }
+  try {
+    // USING GEMINI-3-FLASH-PREVIEW for best performance/cost ratio
+    const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview', 
+        contents: {
+          parts: [
+              { inlineData: { mimeType: mimeType, data: cleanBase64(base64Image) } },
+              { text: prompt }
+          ]
         },
-        required: ["gender", "bodyType", "seasonalColor", "styleKeywords", "detailedDescription"]
-      }
-    }
-  });
+        config: {
+          responseMimeType: "application/json",
+          safetySettings: SAFETY_SETTINGS,
+          responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+              gender: { type: Type.STRING },
+              bodyType: { type: Type.STRING },
+              seasonalColor: { type: Type.STRING },
+              styleKeywords: { type: Type.ARRAY, items: { type: Type.STRING } },
+              detailedDescription: { type: Type.STRING }
+              },
+              required: ["gender", "bodyType", "seasonalColor", "styleKeywords", "detailedDescription"]
+          }
+        }
+    });
 
-  if (response.text) {
-    return parseJSON(response.text) as UserAnalysis;
+    if (response.text) {
+        return parseJSON(response.text) as UserAnalysis;
+    }
+    
+    console.warn("Empty response. Finish reason:", response.candidates?.[0]?.finishReason);
+    throw new Error(`Пустой ответ от ИИ. Причина: ${response.candidates?.[0]?.finishReason || 'Неизвестно'}`);
+
+  } catch (error: any) {
+    console.error("Gemini Analyze Error:", error);
+    // Propagate the REAL error message to the UI
+    throw new Error(`Ошибка AI: ${error.message || error.toString()}`);
   }
-  throw new Error("Не удалось проанализировать изображение");
 };
 
 /**
@@ -144,32 +177,7 @@ export const getStyleRecommendations = async (
 
   if (IS_DEMO_MODE) {
     await new Promise(resolve => setTimeout(resolve, 2500));
-    return [
-      {
-        id: "demo_1",
-        title: "Old Money Aesthetic",
-        description: "Образ в стиле 'тихая роскошь'. Натуральные ткани, спокойные оттенки и безупречный крой.",
-        rationale: "Идеально подходит для вашего цветотипа, подчеркивая статус.",
-        colorPalette: ["#F5F5DC", "#8B4513", "#FFFFFF"],
-        items: [
-          { name: "Кашемировый джемпер", category: "Верх", searchQuery: "кашемировый джемпер бежевый", thumbnailUrl: "https://images.unsplash.com/photo-1576566588028-4147f3842f27?auto=format&fit=crop&q=80&w=200" },
-          { name: "Брюки палаццо", category: "Низ", searchQuery: "брюки палаццо коричневые", thumbnailUrl: "https://images.unsplash.com/photo-1594633312681-425c7b97ccd1?auto=format&fit=crop&q=80&w=200" },
-          { name: "Лоферы Loro Piana style", category: "Обувь", searchQuery: "замшевые лоферы женские", thumbnailUrl: "https://images.unsplash.com/photo-1610902829283-05bf8e8c56fa?auto=format&fit=crop&q=80&w=200" }
-        ]
-      },
-      {
-        id: "demo_2",
-        title: "Urban Minimalist",
-        description: "Современный городской стиль. Строгие линии, монохром и акцентные аксессуары.",
-        rationale: "Подчеркивает структуру фигуры 'Песочные часы'.",
-        colorPalette: ["#000000", "#333333", "#808080"],
-        items: [
-          { name: "Оверсайз жакет", category: "Верх", searchQuery: "черный пиджак оверсайз", thumbnailUrl: "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?auto=format&fit=crop&q=80&w=200" },
-          { name: "Джинсы Straight Fit", category: "Низ", searchQuery: "джинсы прямые серые", thumbnailUrl: "https://images.unsplash.com/photo-1582552938357-32b906df40cb?auto=format&fit=crop&q=80&w=200" },
-          { name: "Сумка-багет", category: "Аксессуары", searchQuery: "сумка багет черная", thumbnailUrl: "https://images.unsplash.com/photo-1584917865442-de89df76afd3?auto=format&fit=crop&q=80&w=200" }
-        ]
-      }
-    ];
+    return []; // Demo data handling is in App.tsx fallback usually, or here
   }
 
   const apiKey = getApiKey();
@@ -195,8 +203,8 @@ export const getStyleRecommendations = async (
       type: Type.OBJECT,
       properties: {
         id: { type: Type.STRING },
-        title: { type: Type.STRING, description: "Creative name of the style in Russian" },
-        description: { type: Type.STRING, description: "Brief description of the mood in Russian" },
+        title: { type: Type.STRING },
+        description: { type: Type.STRING },
         rationale: { type: Type.STRING },
         colorPalette: { type: Type.ARRAY, items: { type: Type.STRING } },
         items: {
@@ -204,7 +212,7 @@ export const getStyleRecommendations = async (
           items: {
             type: Type.OBJECT,
             properties: {
-              name: { type: Type.STRING, description: "Name of the item in Russian" },
+              name: { type: Type.STRING },
               category: { type: Type.STRING },
               searchQuery: { type: Type.STRING }
             },
@@ -216,51 +224,31 @@ export const getStyleRecommendations = async (
     }
   };
 
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: prompt,
-    config: { 
-        responseMimeType: "application/json",
-        responseSchema: schema,
-        tools: [{ googleSearch: {} }] 
-    }
-  });
+  try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: prompt,
+        config: { 
+            responseMimeType: "application/json",
+            safetySettings: SAFETY_SETTINGS,
+            responseSchema: schema,
+            tools: [{ googleSearch: {} }] 
+        }
+      });
 
-  if (response.text) return parseJSON(response.text) as StyleRecommendation[];
-  throw new Error("Не удалось создать рекомендации");
+      if (response.text) return parseJSON(response.text) as StyleRecommendation[];
+      throw new Error("No style data returned");
+  } catch (error: any) {
+      console.error("Style Gen Error:", error);
+      throw new Error(`Ошибка генерации стиля: ${error.message}`);
+  }
 };
 
 /**
  * Find Products
  */
 export const findShoppingProducts = async (itemQuery: string): Promise<ShoppingProduct[]> => {
-  
-  if (IS_DEMO_MODE) {
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    return [
-      {
-        title: "Товар (Демо) - Premium",
-        price: "15 990 ₽",
-        store: "Lamoda",
-        imageUrl: "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&q=80&w=300",
-        url: ""
-      },
-      {
-        title: "Товар (Демо) - Mid-range",
-        price: "5 490 ₽",
-        store: "Lime",
-        imageUrl: "https://images.unsplash.com/photo-1529139574466-a302d2052574?auto=format&fit=crop&q=80&w=300",
-        url: ""
-      },
-      {
-        title: "Товар (Демо) - Budget",
-        price: "2 990 ₽",
-        store: "Wildberries",
-        imageUrl: "https://images.unsplash.com/photo-1523381210434-271e8be1f52b?auto=format&fit=crop&q=80&w=300",
-        url: ""
-      }
-    ];
-  }
+  if (IS_DEMO_MODE) return [];
 
   const apiKey = getApiKey();
   const ai = new GoogleGenAI({ apiKey });
@@ -269,17 +257,25 @@ export const findShoppingProducts = async (itemQuery: string): Promise<ShoppingP
     Identify 3 POPULAR, REAL product options. Return JSON: title, price, store, imageUrl.
   `;
 
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash', 
-    contents: prompt,
-    config: { tools: [{ googleSearch: {} }] }
-  });
+  try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview', 
+        contents: prompt,
+        config: { 
+            safetySettings: SAFETY_SETTINGS,
+            tools: [{ googleSearch: {} }] 
+        }
+      });
 
-  if (response.text) {
-    const products = parseJSON(response.text) as ShoppingProduct[];
-    return products.map(p => ({ ...p, url: '' }));
+      if (response.text) {
+        const products = parseJSON(response.text) as ShoppingProduct[];
+        return products.map(p => ({ ...p, url: '' }));
+      }
+      return [];
+  } catch (error) {
+      console.error("Product Search Error", error);
+      return [];
   }
-  return [];
 };
 
 
@@ -287,11 +283,7 @@ export const findShoppingProducts = async (itemQuery: string): Promise<ShoppingP
  * Edit User Image
  */
 export const editUserImage = async (base64Image: string, textPrompt: string, maskImage?: string): Promise<string> => {
-  
-  if (IS_DEMO_MODE) {
-    await new Promise(resolve => setTimeout(resolve, 3000));
-    return "https://images.unsplash.com/photo-1483985988355-763728e1935b?q=80&w=1470&auto=format&fit=crop"; 
-  }
+  if (IS_DEMO_MODE) return base64Image;
 
   const apiKey = getApiKey();
   const ai = new GoogleGenAI({ apiKey });
@@ -311,15 +303,15 @@ export const editUserImage = async (base64Image: string, textPrompt: string, mas
     const response = await ai.models.generateContent({
       model: model,
       contents: { parts },
+      config: { safetySettings: SAFETY_SETTINGS }
     });
 
     for (const part of response.candidates?.[0]?.content?.parts || []) {
       if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
     }
+    throw new Error("No image data in response");
   } catch (error: any) {
     console.error("Gemini Image Edit Error:", error);
-    throw new Error("Не удалось сгенерировать изображение.");
+    throw new Error(`Ошибка редактора: ${error.message}`);
   }
-
-  throw new Error("Не удалось сгенерировать изображение");
 };
