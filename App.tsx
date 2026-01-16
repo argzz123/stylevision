@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { analyzeUserImage, getStyleRecommendations, editUserImage, IS_DEMO_MODE } from './services/geminiService';
 import { createPayment, PaymentResponse, checkPaymentStatus } from './services/paymentService';
 import { storageService } from './services/storageService'; 
@@ -79,7 +79,14 @@ const App: React.FC = () => {
             tg.expand();
             const tgUser = tg.initDataUnsafe?.user;
             if (tgUser) {
-                await handleLogin({ ...tgUser, isGuest: false });
+                // We use the function below, but since it's defined later we can't use it directly in effect if not careful
+                // So we just inline the logic or move function up. 
+                // However, since handleLogin is now memoized, we can add it to dep array or just call the logic.
+                setUser({ ...tgUser, isGuest: false });
+                localStorage.setItem('stylevision_current_user', JSON.stringify({ ...tgUser, isGuest: false }));
+                await storageService.saveUser({ ...tgUser, isGuest: false });
+                await loadUserData(tgUser.id);
+                setIsAuthChecking(false);
                 return;
             }
         }
@@ -89,7 +96,10 @@ const App: React.FC = () => {
         if (storedUser) {
             try {
                 const parsedUser = JSON.parse(storedUser);
-                await handleLogin(parsedUser);
+                setUser(parsedUser);
+                await storageService.saveUser(parsedUser);
+                await loadUserData(parsedUser.id);
+                setIsAuthChecking(false);
                 return;
             } catch (e) {
                 console.error("Failed to restore session", e);
@@ -102,22 +112,23 @@ const App: React.FC = () => {
     initApp();
   }, []);
 
-  const handleLogin = async (userData: TelegramUser) => {
+  // Memoized to prevent LoginScreen re-renders which reload the Widget
+  const handleLogin = useCallback(async (userData: TelegramUser) => {
      setUser(userData);
      localStorage.setItem('stylevision_current_user', JSON.stringify(userData)); // Persist session
      
      await storageService.saveUser(userData); // Async persist to DB
      await loadUserData(userData.id);
      setIsAuthChecking(false);
-  };
+  }, []);
 
-  const handleUpgradeAccount = async (upgradedUser: TelegramUser) => {
+  const handleUpgradeAccount = useCallback(async (upgradedUser: TelegramUser) => {
      setUser(upgradedUser);
      localStorage.setItem('stylevision_current_user', JSON.stringify(upgradedUser));
      await storageService.saveUser(upgradedUser); 
      setShowAuthRequest(false);
      setShowPaymentModal(true);
-  };
+  }, []);
 
   const loadUserData = async (userId: number) => {
     // 1. Load History via Service (Async)

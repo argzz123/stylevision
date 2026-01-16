@@ -3,8 +3,8 @@ import { TelegramUser } from '../types';
 
 interface LoginScreenProps {
   onLogin: (user: TelegramUser) => void;
-  isOverlay?: boolean; // If true, renders as a modal on top of existing content
-  onCancel?: () => void; // For overlay mode
+  isOverlay?: boolean;
+  onCancel?: () => void;
 }
 
 const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isOverlay = false, onCancel }) => {
@@ -13,9 +13,9 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isOverlay = false, o
 
   // 1. SETUP TELEGRAM WIDGET
   useEffect(() => {
-    // Define the global callback that Telegram widget will call upon success
+    // 1. Define global callback
     (window as any).onTelegramAuth = (user: any) => {
-      console.log("Real Telegram Auth Success:", user);
+      console.log("Telegram Auth Success:", user);
       onLogin({
         id: user.id,
         first_name: user.first_name,
@@ -26,36 +26,41 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isOverlay = false, o
       });
     };
 
-    // Inject the script
+    // 2. Prepare script
     const script = document.createElement('script');
     script.src = "https://telegram.org/js/telegram-widget.js?22";
-    script.setAttribute('data-telegram-login', 'stylevision_bot'); // Your Bot Username
+    script.setAttribute('data-telegram-login', 'stylevision_bot'); 
     script.setAttribute('data-size', 'large');
     script.setAttribute('data-radius', '12');
+    // Restoration: 'write' access often helps with code delivery and bot permissions
+    script.setAttribute('data-request-access', 'write'); 
     script.setAttribute('data-onauth', 'onTelegramAuth(user)');
-    script.setAttribute('data-request-access', 'write');
     script.async = true;
 
+    // 3. Inject
     if (telegramWrapperRef.current) {
-        telegramWrapperRef.current.innerHTML = ''; // Clear previous instances
+        telegramWrapperRef.current.innerHTML = ''; // Clean previous
         telegramWrapperRef.current.appendChild(script);
     }
 
     return () => {
-        // Cleanup mostly managed by React unmounting the div, but good to know
+        // Cleanup to prevent memory leaks or conflicts
+        delete (window as any).onTelegramAuth;
+        if (telegramWrapperRef.current) {
+            telegramWrapperRef.current.innerHTML = '';
+        }
     };
   }, [onLogin]);
 
-  // 2. GUEST LOGIN (Fallback)
   const handleGuestLogin = (e: React.FormEvent) => {
     e.preventDefault();
     if (!mockName.trim()) return;
 
     const guestUser: TelegramUser = {
-      id: Date.now(), // Random ID
+      id: Date.now(),
       first_name: mockName,
       username: `guest_${Date.now()}`,
-      isGuest: true // Mark as guest
+      isGuest: true
     };
     onLogin(guestUser);
   };
@@ -66,7 +71,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isOverlay = false, o
 
   return (
     <div className={containerClasses}>
-      {/* Background Ambience (Only if not overlay) */}
       {!isOverlay && (
         <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0">
             <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-amber-900/10 rounded-full blur-[120px]"></div>
@@ -97,23 +101,21 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isOverlay = false, o
             )}
 
             <h2 className="text-xl font-serif text-white mb-2 text-center">
-                {isOverlay ? 'Требуется авторизация' : 'Авторизация'}
+                {isOverlay ? 'Требуется авторизация' : 'Вход через Telegram'}
             </h2>
-            {isOverlay && (
-                <p className="text-amber-500 text-xs text-center mb-6">
-                    Для оформления подписки необходимо привязать Telegram аккаунт.
-                </p>
-            )}
             
             <div className="space-y-6 mt-6">
-               {/* REAL TELEGRAM WIDGET CONTAINER */}
-               <div className="flex flex-col items-center justify-center min-h-[50px]">
+               <div className="flex flex-col items-center justify-center min-h-[50px] bg-white/5 rounded-lg p-4">
                   <div ref={telegramWrapperRef} className="flex justify-center w-full"></div>
-                  
-                  {/* Info text for dev environment */}
-                  <p className="text-[10px] text-neutral-700 mt-2 text-center max-w-xs">
-                     Если кнопки нет, убедитесь что вы на домене <code>stylevision.vercel.app</code>
-                  </p>
+               </div>
+
+               <div className="text-[10px] text-neutral-500 text-center leading-relaxed bg-neutral-900/50 p-3 rounded border border-neutral-800">
+                  <p className="mb-2">⚠️ <strong>Код не приходит?</strong></p>
+                  <ol className="list-decimal list-inside space-y-1 text-neutral-400 text-left px-2">
+                      <li>Проверьте приложение Telegram (чат "Telegram").</li>
+                      <li>Если не помогло: найдите бота <strong>@stylevision_bot</strong> и нажмите <span className="text-amber-500 font-mono">/start</span> или "Перезапустить".</li>
+                      <li>Обновите эту страницу.</li>
+                  </ol>
                </div>
 
                {!isOverlay && (
@@ -127,7 +129,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isOverlay = false, o
                           </div>
                        </div>
 
-                       {/* Browser fallback login form */}
                        <form onSubmit={handleGuestLogin} className="space-y-4">
                           <input 
                             type="text" 
@@ -141,16 +142,12 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isOverlay = false, o
                             disabled={!mockName.trim()}
                             className="w-full bg-white text-black font-bold py-3.5 rounded-xl hover:bg-neutral-200 transition-colors disabled:opacity-50 uppercase tracking-wider text-xs"
                           >
-                             Начать работу
+                             Войти без Telegram
                           </button>
                        </form>
                    </>
                )}
             </div>
-            
-            <p className="mt-6 text-[10px] text-neutral-600 text-center leading-relaxed">
-               Ваша подписка и история стилей будут привязаны к вашему аккаунту Telegram.
-            </p>
          </div>
       </div>
     </div>
