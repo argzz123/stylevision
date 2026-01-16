@@ -45,14 +45,25 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, currentUserId }) => {
     }
   };
 
-  const handleSaveKey = () => {
+  const handleSaveKey = async () => {
       if (manualKey.trim().length < 20) {
           alert("Ключ слишком короткий");
           return;
       }
+      
+      // 1. Save Locally for Admin
       localStorage.setItem('stylevision_api_key_override', manualKey.trim());
-      alert("Ключ сохранен локально! Принудительная перезагрузка страницы...");
-      window.location.reload();
+      
+      // 2. Save Globally to Supabase
+      const savedToDb = await storageService.saveGlobalApiKey(manualKey.trim());
+      
+      if (savedToDb) {
+          alert("Ключ сохранен в Базе Данных! Теперь приложение работает у ВСЕХ пользователей.");
+      } else {
+          alert("Ключ сохранен локально, но ошибка записи в БД. Работает только у вас.");
+      }
+      
+      testApiConnection();
   };
 
   const handleClearKey = () => {
@@ -66,7 +77,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, currentUserId }) => {
      setApiStatus('UNKNOWN');
      const start = Date.now();
      try {
-         // This now tests the FULL chain: Local -> Env -> Server
          const key = await getOrFetchApiKey();
          if (!key || key.includes('AIzaSyDS7WO')) throw new Error("API Key not found or invalid");
          if (key.startsWith('AIza')) {
@@ -210,26 +220,26 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, currentUserId }) => {
                             {apiLatency > 0 && <p className="text-xs text-neutral-500 mb-4">Latency: {apiLatency}ms</p>}
 
                             <button onClick={testApiConnection} className="w-full bg-neutral-800 hover:bg-neutral-700 text-white py-2 rounded transition-colors text-sm">
-                                Проверить соединение (Server Fetch)
+                                Проверить соединение
                             </button>
                         </div>
 
-                        {/* Local Key Override Card */}
+                        {/* Global Key Manager */}
                         <div className="bg-neutral-900 border border-neutral-800 p-6 rounded-lg">
-                             <h3 className="text-lg font-bold text-white mb-2">Локальный ключ (Admin)</h3>
+                             <h3 className="text-lg font-bold text-white mb-2">Глобальный API Ключ</h3>
                              <p className="text-xs text-neutral-500 mb-4">
-                                Действует только для этого браузера. Если удалите - приложение попытается взять ключ с сервера Vercel.
+                                Этот ключ сохранится в базе данных и будет раздаваться всем пользователям автоматически, если Vercel сервер недоступен.
                              </p>
                              <div className="flex gap-2">
                                  <input 
                                     type="text" 
                                     value={manualKey}
                                     onChange={(e) => setManualKey(e.target.value)}
-                                    placeholder="Ключ..."
+                                    placeholder="Вставьте рабочий ключ..."
                                     className="flex-grow bg-black border border-neutral-700 rounded p-2 text-white text-sm font-mono focus:border-amber-500 outline-none"
                                  />
                                  <button onClick={handleSaveKey} className="bg-amber-600 text-black font-bold px-3 py-2 rounded text-sm hover:bg-amber-500">
-                                     Save
+                                     Сохранить для ВСЕХ
                                  </button>
                                  {isOverride && (
                                      <button onClick={handleClearKey} className="bg-red-900/30 text-red-500 border border-red-900 font-bold px-3 py-2 rounded text-sm hover:bg-red-900/50">
@@ -244,12 +254,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, currentUserId }) => {
                              <h3 className="text-lg font-bold text-white mb-4">Отладка доступа</h3>
                              <div className="grid grid-cols-2 gap-4 text-xs font-mono">
                                  <div className="p-3 bg-black rounded">
-                                     <span className="text-neutral-500 block">Local Storage (Browser)</span>
+                                     <span className="text-neutral-500 block">Local Storage</span>
                                      <span className={localKey ? "text-green-500" : "text-neutral-500"}>{localKey ? 'PRESENT' : 'EMPTY'}</span>
                                  </div>
                                  <div className="p-3 bg-black rounded">
-                                     <span className="text-neutral-500 block">Server Environment (Vercel)</span>
-                                     <span className="text-blue-500">Check via "Проверить соединение"</span>
+                                     <span className="text-neutral-500 block">Supabase (Database) Fallback</span>
+                                     <span className="text-blue-500">Enabled (System User -100)</span>
                                  </div>
                              </div>
                         </div>

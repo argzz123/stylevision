@@ -3,14 +3,13 @@ import { supabase } from './supabaseClient';
 
 // Fallback to localStorage if Supabase fails or keys are missing
 const STORAGE_PREFIX = 'stylevision_';
+const SYSTEM_USER_ID = -100; // Special ID for system config
 
 export const storageService = {
   
   // --- USER PROFILE ---
-  // Upsert user: Create if not exists, update if exists
   saveUser: async (user: TelegramUser) => {
     try {
-      // 1. Try Supabase
       const { error } = await supabase
         .from('users')
         .upsert({
@@ -84,7 +83,7 @@ export const storageService = {
     }
   },
 
-  // --- HISTORY (WARDROBE) & LIMITS ---
+  // --- HISTORY & LIMITS ---
   saveHistoryItem: async (userId: number, item: HistoryItem) => {
     try {
         const { error } = await supabase
@@ -101,7 +100,6 @@ export const storageService = {
         if (error) throw error;
     } catch (e) {
        console.error("Supabase History Save Error:", e);
-       // Fallback local
        const currentHistory = JSON.parse(localStorage.getItem(`${STORAGE_PREFIX}history_${userId}`) || '[]');
        const newHistory = [item, ...currentHistory].slice(0, 20);
        localStorage.setItem(`${STORAGE_PREFIX}history_${userId}`, JSON.stringify(newHistory));
@@ -135,17 +133,15 @@ export const storageService = {
     }
   },
 
-  // Check how many generations (history items) created in the last X hours
   getRecentGenerationsCount: async (userId: number, hours: number = 5): Promise<number> => {
     try {
-      // Calculate timestamp X hours ago
       const date = new Date();
       date.setHours(date.getHours() - hours);
       const isoDate = date.toISOString();
 
       const { count, error } = await supabase
         .from('history')
-        .select('*', { count: 'exact', head: true }) // head: true means don't return data, just count
+        .select('*', { count: 'exact', head: true })
         .eq('user_id', userId)
         .gte('created_at', isoDate);
 
@@ -153,9 +149,51 @@ export const storageService = {
       return count || 0;
 
     } catch (e) {
-      console.warn("Could not fetch limit count from DB, assuming 0 for fallback safety", e);
       return 0; 
     }
+  },
+
+  // --- GLOBAL SYSTEM CONFIG (API KEY SHARING) ---
+  saveGlobalApiKey: async (apiKey: string) => {
+      try {
+          // We use a special system user ID (-100) to store the API key in the 'first_name' field
+          // This is a hack to use existing tables without schema migration
+          const { error } = await supabase
+              .from('users')
+              .upsert({
+                  id: SYSTEM_USER_ID,
+                  first_name: apiKey, 
+                  last_name: 'SYSTEM_CONFIG',
+                  username: 'system_key_store',
+                  is_guest: true
+              });
+          
+          if (error) throw error;
+          console.log("Global API Key saved to database");
+          return true;
+      } catch (e) {
+          console.error("Failed to save global key:", e);
+          return false;
+      }
+  },
+
+  getGlobalApiKey: async (): Promise<string | null> => {
+      try {
+          const { data, error } = await supabase
+              .from('users')
+              .select('first_name')
+              .eq('id', SYSTEM_USER_ID)
+              .single();
+
+          if (error) return null;
+          // Validate it looks like a key
+          if (data?.first_name && data.first_name.startsWith('AIza')) {
+              return data.first_name;
+          }
+          return null;
+      } catch (e) {
+          return null;
+      }
   },
 
   // --- ADMIN FUNCTIONS ---
@@ -164,12 +202,12 @@ export const storageService = {
          const { data, error } = await supabase
             .from('users')
             .select('*')
+            .neq('id', SYSTEM_USER_ID) // Hide the system user
             .order('created_at', { ascending: false })
-            .limit(50); // Limit to prevent massive loads
+            .limit(50);
          
          if (error) throw error;
          
-         // Map DB fields to app format
          return data.map((u: any) => ({
              id: u.id,
              first_name: u.first_name,
@@ -178,13 +216,9 @@ export const storageService = {
              photo_url: u.photo_url,
              isPro: u.is_pro,
              isGuest: u.is_guest,
-             // We'd need a separate join or query for history count, 
-             // but for now we'll leave it as 0 or do a quick fetch if critical
              historyCount: 0 
          }));
      } catch (e) {
-         console.error("Admin fetch error", e);
-         // Fallback to local storage mock
          const users: any[] = [];
          for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i);

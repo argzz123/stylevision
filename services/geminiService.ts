@@ -1,22 +1,20 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { UserAnalysis, StyleRecommendation, AnalysisMode, Store, StylePreferences, ShoppingProduct } from "../types";
+import { storageService } from "./storageService";
 
 // --- DEMO MODE CONFIGURATION ---
 export const IS_DEMO_MODE = false; 
 
-// Cache the key in memory so we don't hit the server on every request
+// Cache the key in memory
 let cachedApiKey: string | null = null;
 
-// Helper to remove data URL prefix for API calls
 const cleanBase64 = (base64: string) => base64.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, '');
 
-// Helper to extract mime type from base64 string
 const getMimeType = (base64: string) => {
   const match = base64.match(/^data:(image\/\w+);base64,/);
   return match ? match[1] : 'image/jpeg';
 };
 
-// Helper to safely parse JSON
 const parseJSON = (text: string) => {
   try {
     let cleaned = text.replace(/```json\n?|```/g, '').trim();
@@ -62,7 +60,8 @@ const parseJSON = (text: string) => {
  * 1. Check Memory Cache
  * 2. Check LocalStorage (Admin Override)
  * 3. Check Vite Env Vars (Build time)
- * 4. Check Server Endpoint (Runtime fallback)
+ * 4. Check Server Endpoint (Runtime Vercel Env)
+ * 5. Check Supabase Database (Global Fallback)
  */
 export const getOrFetchApiKey = async (): Promise<string | null> => {
     // 1. Memory Cache
@@ -85,7 +84,6 @@ export const getOrFetchApiKey = async (): Promise<string | null> => {
         }
     } catch (e) {}
 
-    // Check standard process.env just in case
     if (!envKey && typeof process !== 'undefined' && process.env) {
         envKey = process.env.REACT_APP_API_KEY || process.env.API_KEY;
     }
@@ -95,9 +93,8 @@ export const getOrFetchApiKey = async (): Promise<string | null> => {
         return envKey;
     }
 
-    // 4. Server Fallback (The Fix for Vercel)
+    // 4. Server Fallback (Vercel)
     try {
-        console.log("Fetching API Key from server...");
         const response = await fetch('/api/get-key');
         if (response.ok) {
             const data = await response.json();
@@ -107,18 +104,29 @@ export const getOrFetchApiKey = async (): Promise<string | null> => {
             }
         }
     } catch (e) {
-        console.error("Failed to fetch key from server:", e);
+        // Silent fail, try next method
+    }
+
+    // 5. Supabase Database Fallback (Ultimate backup)
+    try {
+        const dbKey = await storageService.getGlobalApiKey();
+        if (dbKey) {
+            console.log("Using API Key from Database");
+            cachedApiKey = dbKey;
+            localStorage.setItem('stylevision_api_key_override', dbKey); // Cache locally for speed next time
+            return dbKey;
+        }
+    } catch (e) {
+        console.error("Database key fetch failed", e);
     }
 
     return null;
 };
 
-// For synchronous checks (e.g. UI status), we only check what we have instantly
 export const getApiKeySync = () => {
     return cachedApiKey || localStorage.getItem('stylevision_api_key_override');
 }
 
-// SAFETY SETTINGS
 const SAFETY_SETTINGS = [
   { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
   { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
@@ -126,9 +134,6 @@ const SAFETY_SETTINGS = [
   { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
 ];
 
-/**
- * Analyzes the user's photo using Gemini (Vision)
- */
 export const analyzeUserImage = async (base64Image: string, mode: AnalysisMode = 'STANDARD'): Promise<UserAnalysis> => {
   if (IS_DEMO_MODE) {
     await new Promise(resolve => setTimeout(resolve, 2000));
@@ -142,7 +147,7 @@ export const analyzeUserImage = async (base64Image: string, mode: AnalysisMode =
   }
 
   const apiKey = await getOrFetchApiKey();
-  if (!apiKey) throw new Error("Системная ошибка: API Key не найден ни в браузере, ни на сервере.");
+  if (!apiKey) throw new Error("Системная ошибка: API Key не настроен. Обратитесь к администратору.");
 
   const ai = new GoogleGenAI({ apiKey });
   
@@ -203,9 +208,6 @@ export const analyzeUserImage = async (base64Image: string, mode: AnalysisMode =
   }
 };
 
-/**
- * Generates style recommendations
- */
 export const getStyleRecommendations = async (
   analysis: UserAnalysis, 
   stores: Store[],
@@ -282,9 +284,6 @@ export const getStyleRecommendations = async (
   }
 };
 
-/**
- * Find Products
- */
 export const findShoppingProducts = async (itemQuery: string): Promise<ShoppingProduct[]> => {
   if (IS_DEMO_MODE) return [];
 
@@ -317,10 +316,6 @@ export const findShoppingProducts = async (itemQuery: string): Promise<ShoppingP
   }
 };
 
-
-/**
- * Edit User Image
- */
 export const editUserImage = async (base64Image: string, textPrompt: string, maskImage?: string): Promise<string> => {
   if (IS_DEMO_MODE) return base64Image;
 
