@@ -19,16 +19,15 @@ export interface PaymentResponse {
  */
 export const createPayment = async (): Promise<PaymentResponse> => {
   
-  // Используем относительный путь, который Vercel обработает как API запрос
   const SERVER_URL = '/api/create-payment';
 
-  // Construct a return URL that signals success back to our app
-  const returnUrl = new URL(window.location.href);
-  returnUrl.searchParams.set('payment_processed', 'true');
+  // We do NOT add 'payment_processed=true' here manually anymore to prevent fake success.
+  // We just return to the app, and the app will check localStorage for pending payment IDs.
+  const returnUrl = window.location.href;
 
   const paymentData = {
     amount: "1.00",
-    returnUrl: returnUrl.toString(),
+    returnUrl: returnUrl,
     description: "Подписка StyleVision PRO (Тест)"
   };
 
@@ -46,6 +45,12 @@ export const createPayment = async (): Promise<PaymentResponse> => {
     }
 
     const data = await response.json();
+    
+    // SAVE ID TO LOCAL STORAGE for verification later
+    if (data.id) {
+        localStorage.setItem('pending_payment_id', data.id);
+    }
+
     return data;
 
   } catch (error) {
@@ -53,3 +58,24 @@ export const createPayment = async (): Promise<PaymentResponse> => {
     throw error;
   }
 };
+
+/**
+ * Verify payment status with backend
+ */
+export const checkPaymentStatus = async (paymentId: string): Promise<boolean> => {
+    try {
+        const response = await fetch('/api/check-payment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ paymentId })
+        });
+        
+        if (!response.ok) return false;
+        
+        const data = await response.json();
+        return data.status === 'succeeded' || data.paid === true;
+    } catch (e) {
+        console.error("Verification failed", e);
+        return false;
+    }
+}

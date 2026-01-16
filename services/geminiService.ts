@@ -50,6 +50,11 @@ const parseJSON = (text: string) => {
   }
 };
 
+// Access API Key supporting both local/node env and Vercel/React env
+const getApiKey = () => {
+    return process.env.REACT_APP_API_KEY || process.env.API_KEY;
+};
+
 /**
  * Analyzes the user's photo using Gemini 3 Pro (Vision)
  */
@@ -66,7 +71,10 @@ export const analyzeUserImage = async (base64Image: string, mode: AnalysisMode =
     };
   }
 
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error("API Key missing. Please set REACT_APP_API_KEY in Vercel.");
+
+  const ai = new GoogleGenAI({ apiKey });
   
   let promptInstructions = "";
 
@@ -163,7 +171,8 @@ export const getStyleRecommendations = async (
     ];
   }
 
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = getApiKey();
+  const ai = new GoogleGenAI({ apiKey });
   const activeStores = stores.filter(s => s.isSelected);
   const siteOperators = activeStores.length > 0 ? activeStores.map(s => `site:${s.domain}`).join(' OR ') : '';
   const storeInstruction = siteOperators ? `SEARCH INSTRUCTIONS: Search ONLY within these domains: ${activeStores.map(s => s.name).join(', ')} using query operator "(${siteOperators})".` : '';
@@ -252,7 +261,8 @@ export const findShoppingProducts = async (itemQuery: string): Promise<ShoppingP
     ];
   }
 
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = getApiKey();
+  const ai = new GoogleGenAI({ apiKey });
   const prompt = `
     TASK: Fast Product Search. QUERY: "${itemQuery}". MARKET: Russia.
     Identify 3 POPULAR, REAL product options. Return JSON: title, price, store, imageUrl.
@@ -282,7 +292,8 @@ export const editUserImage = async (base64Image: string, textPrompt: string, mas
     return "https://images.unsplash.com/photo-1483985988355-763728e1935b?q=80&w=1470&auto=format&fit=crop"; 
   }
 
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = getApiKey();
+  const ai = new GoogleGenAI({ apiKey });
   const model = 'gemini-2.5-flash-image';
 
   const parts: any[] = [

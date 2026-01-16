@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { analyzeUserImage, getStyleRecommendations, editUserImage, IS_DEMO_MODE } from './services/geminiService';
-import { createPayment, PaymentResponse } from './services/paymentService';
+import { createPayment, PaymentResponse, checkPaymentStatus } from './services/paymentService';
 import { storageService } from './services/storageService'; 
 import { AppState, UserAnalysis, StyleRecommendation, AnalysisMode, Store, Season, Occasion, HistoryItem, MobileTab, TelegramUser } from './types';
 import StyleCard from './components/StyleCard';
@@ -69,33 +69,43 @@ const App: React.FC = () => {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Initialize
+  // Initialize and Check Session
   useEffect(() => {
-    // 1. Check if running inside Telegram WebApp
-    const tg = (window as any).Telegram?.WebApp;
-    if (tg) {
-      tg.ready();
-      tg.expand();
-      const tgUser = tg.initDataUnsafe?.user;
-      if (tgUser) {
-         handleLogin({ ...tgUser, isGuest: false });
-         // We don't set isAuthChecking(false) here, it happens in handleLogin -> loadUserData
-         return; 
-      }
-    }
+    const initApp = async () => {
+        // 1. Check if running inside Telegram WebApp
+        const tg = (window as any).Telegram?.WebApp;
+        if (tg) {
+            tg.ready();
+            tg.expand();
+            const tgUser = tg.initDataUnsafe?.user;
+            if (tgUser) {
+                await handleLogin({ ...tgUser, isGuest: false });
+                return;
+            }
+        }
 
-    // 2. Fallback if not in Telegram (Local session check could be added here, but for now we force login)
-    setIsAuthChecking(false);
+        // 2. Check LocalStorage for persistent session (Fix for refresh issue)
+        const storedUser = localStorage.getItem('stylevision_current_user');
+        if (storedUser) {
+            try {
+                const parsedUser = JSON.parse(storedUser);
+                await handleLogin(parsedUser);
+                return;
+            } catch (e) {
+                console.error("Failed to restore session", e);
+            }
+        }
 
-    // 3. Check for Payment Return (URL Params)
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('payment_processed') === 'true') {
-        // Logic handled in loadUserData
-    }
+        setIsAuthChecking(false);
+    };
+
+    initApp();
   }, []);
 
   const handleLogin = async (userData: TelegramUser) => {
      setUser(userData);
+     localStorage.setItem('stylevision_current_user', JSON.stringify(userData)); // Persist session
+     
      await storageService.saveUser(userData); // Async persist to DB
      await loadUserData(userData.id);
      setIsAuthChecking(false);
@@ -103,6 +113,7 @@ const App: React.FC = () => {
 
   const handleUpgradeAccount = async (upgradedUser: TelegramUser) => {
      setUser(upgradedUser);
+     localStorage.setItem('stylevision_current_user', JSON.stringify(upgradedUser));
      await storageService.saveUser(upgradedUser); 
      setShowAuthRequest(false);
      setShowPaymentModal(true);
@@ -116,13 +127,21 @@ const App: React.FC = () => {
     // 2. Check Pro Status via Service (Async)
     let proStatus = await storageService.getProStatus(userId);
 
-    // 3. Payment Verification (URL Callback)
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('payment_processed') === 'true') {
-        proStatus = true;
-        await storageService.setProStatus(userId, true);
-        setShowPaymentModal(false);
-        window.history.replaceState({}, document.title, window.location.pathname);
+    // 3. Payment Verification (Robust Check)
+    const pendingPaymentId = localStorage.getItem('pending_payment_id');
+    if (pendingPaymentId) {
+        setProcessingMessage('Проверка платежа...');
+        // We show a subtle loading state logic if needed, but for now just check
+        const isPaid = await checkPaymentStatus(pendingPaymentId);
+        
+        if (isPaid) {
+            proStatus = true;
+            await storageService.setProStatus(userId, true);
+            alert("Оплата прошла успешно! PRO режим активирован.");
+            setShowPaymentModal(false);
+        }
+        // Clean up pending ID regardless of result so we don't loop check
+        localStorage.removeItem('pending_payment_id');
     }
     
     setIsPro(proStatus);
@@ -310,9 +329,7 @@ const App: React.FC = () => {
       const newImage = await editUserImage(originalImage, prompt);
       setCurrentImage(newImage);
       
-      // CRITICAL FIX: Do NOT await this. 
-      // Saving to DB is slow (big base64 string). We want UI to unblock immediately.
-      // This runs in background.
+      // Saving runs in background
       saveToHistory(newImage, safeTitle);
 
     } catch (error) {
@@ -337,7 +354,7 @@ const App: React.FC = () => {
         const newImage = await editUserImage(currentImage, editPrompt);
         setCurrentImage(newImage);
         
-        // CRITICAL FIX: Run background save
+        // Background save
         saveToHistory(newImage, "Edit: " + editPrompt);
         
         setEditPrompt('');
@@ -356,6 +373,13 @@ const App: React.FC = () => {
     setCurrentImage(null);
     setAnalysis(null);
     setRecommendations([]);
+  };
+
+  const handleLogout = () => {
+     setUser(null);
+     localStorage.removeItem('stylevision_current_user');
+     setAppState(AppState.UPLOAD);
+     setHistory([]);
   };
 
   // 1. Loading
@@ -418,7 +442,11 @@ const App: React.FC = () => {
                 </button>
              )}
 
-             <div className={`hidden md:flex items-center gap-2 text-xs border border-neutral-800 rounded-full px-3 py-1 bg-neutral-900 ${user.isGuest ? 'text-neutral-500' : 'text-amber-500 border-amber-900/30'}`}>
+             <div 
+                onClick={handleLogout}
+                className={`hidden md:flex cursor-pointer items-center gap-2 text-xs border border-neutral-800 rounded-full px-3 py-1 bg-neutral-900 hover:bg-red-900/10 hover:border-red-900/30 transition-all group ${user.isGuest ? 'text-neutral-500' : 'text-amber-500 border-amber-900/30'}`}
+                title="Нажмите чтобы выйти"
+             >
                 <span className={`w-2 h-2 rounded-full ${user.isGuest ? 'bg-neutral-500' : 'bg-green-500'}`}></span>
                 {user.username || user.first_name}
              </div>
