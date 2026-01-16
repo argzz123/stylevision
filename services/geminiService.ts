@@ -59,17 +59,40 @@ const parseJSON = (text: string) => {
   }
 };
 
-// Access API Key from Environment Variables ONLY.
-// NEVER hardcode keys starting with 'AIza' in the source code.
-const getApiKey = () => {
-    // Check standard React/Vercel env var
-    const key = process.env.REACT_APP_API_KEY || process.env.API_KEY;
+// Access API Key logic:
+// 1. Check LocalStorage override (Manual fix via Admin Panel)
+// 2. Check Vite Env Vars (import.meta.env.VITE_API_KEY)
+// 3. Check Standard React Env Vars (process.env.REACT_APP_API_KEY)
+export const getApiKey = () => {
+    // 1. Manual Override from Admin Panel (Immediate fix)
+    // Safe from Google Scanners because it lives in user's browser storage, not in code repo.
+    const localKey = localStorage.getItem('stylevision_api_key_override');
+    if (localKey && localKey.startsWith('AIza')) {
+        return localKey;
+    }
+
+    let envKey = undefined;
+
+    // 2. Try Vite (modern)
+    try {
+        // @ts-ignore
+        if (typeof import.meta !== 'undefined' && import.meta.env) {
+            // @ts-ignore
+            envKey = import.meta.env.VITE_API_KEY;
+        }
+    } catch (e) {}
+
+    // 3. Try React/Node (legacy/standard)
+    if (!envKey && typeof process !== 'undefined' && process.env) {
+        envKey = process.env.REACT_APP_API_KEY || process.env.API_KEY;
+    }
     
-    if (!key || key.includes("AIzaSyDS7WO")) {
-        // Check if it's the old leaked key or missing
+    // Block the known leaked key if it accidentally remains
+    if (envKey && envKey.includes("AIzaSyDS7WO")) {
         return null;
     }
-    return key;
+    
+    return envKey || null;
 };
 
 // SAFETY SETTINGS: Disable blocks to allow analyzing human photos
@@ -97,7 +120,7 @@ export const analyzeUserImage = async (base64Image: string, mode: AnalysisMode =
   }
 
   const apiKey = getApiKey();
-  if (!apiKey) throw new Error("API Key не настроен. Добавьте REACT_APP_API_KEY в переменные окружения Vercel.");
+  if (!apiKey) throw new Error("API Key не настроен. Зайдите в Админ-панель -> Система и введите ключ вручную (это безопасно) или добавьте VITE_API_KEY в Vercel.");
 
   const ai = new GoogleGenAI({ apiKey });
   
