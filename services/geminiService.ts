@@ -1,20 +1,22 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { UserAnalysis, StyleRecommendation, AnalysisMode, Store, StylePreferences, ShoppingProduct } from "../types";
-import { storageService } from "./storageService";
 
 // --- DEMO MODE CONFIGURATION ---
 export const IS_DEMO_MODE = false; 
 
-// Cache the key in memory
-let cachedApiKey: string | null = null;
+// --- HARDCODED API KEY ---
+const HARDCODED_KEY = "AIzaSyBprgKP-gUtZIupOGIsJb2HkZ5OD3Kg_gc";
 
+// Helper to remove data URL prefix for API calls
 const cleanBase64 = (base64: string) => base64.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, '');
 
+// Helper to extract mime type from base64 string
 const getMimeType = (base64: string) => {
   const match = base64.match(/^data:(image\/\w+);base64,/);
   return match ? match[1] : 'image/jpeg';
 };
 
+// Helper to safely parse JSON
 const parseJSON = (text: string) => {
   try {
     let cleaned = text.replace(/```json\n?|```/g, '').trim();
@@ -56,75 +58,15 @@ const parseJSON = (text: string) => {
 };
 
 /**
- * ROBUST API KEY RETRIEVAL STRATEGY
- * 1. Check Memory Cache
- * 2. Check LocalStorage (Admin Override)
- * 3. Check Vite Env Vars (Build time)
- * 4. Check Server Endpoint (Runtime Vercel Env)
- * 5. Check Supabase Database (Global Fallback)
+ * DIRECT API KEY ACCESS
+ * Using hardcoded key as requested for stability.
  */
-export const getOrFetchApiKey = async (): Promise<string | null> => {
-    // 1. Memory Cache
-    if (cachedApiKey) return cachedApiKey;
-
-    // 2. LocalStorage (Admin/Manual Fix)
-    const localKey = localStorage.getItem('stylevision_api_key_override');
-    if (localKey && localKey.startsWith('AIza')) {
-        cachedApiKey = localKey;
-        return localKey;
-    }
-
-    // 3. Vite Environment Variables
-    let envKey = undefined;
-    try {
-        // @ts-ignore
-        if (typeof import.meta !== 'undefined' && import.meta.env) {
-            // @ts-ignore
-            envKey = import.meta.env.VITE_API_KEY;
-        }
-    } catch (e) {}
-
-    if (!envKey && typeof process !== 'undefined' && process.env) {
-        envKey = process.env.REACT_APP_API_KEY || process.env.API_KEY;
-    }
-
-    if (envKey && !envKey.includes("AIzaSyDS7WO")) {
-        cachedApiKey = envKey;
-        return envKey;
-    }
-
-    // 4. Server Fallback (Vercel)
-    try {
-        const response = await fetch('/api/get-key');
-        if (response.ok) {
-            const data = await response.json();
-            if (data.key) {
-                cachedApiKey = data.key;
-                return data.key;
-            }
-        }
-    } catch (e) {
-        // Silent fail, try next method
-    }
-
-    // 5. Supabase Database Fallback (Ultimate backup)
-    try {
-        const dbKey = await storageService.getGlobalApiKey();
-        if (dbKey) {
-            console.log("Using API Key from Database");
-            cachedApiKey = dbKey;
-            localStorage.setItem('stylevision_api_key_override', dbKey); // Cache locally for speed next time
-            return dbKey;
-        }
-    } catch (e) {
-        console.error("Database key fetch failed", e);
-    }
-
-    return null;
+export const getOrFetchApiKey = async (): Promise<string> => {
+    return HARDCODED_KEY;
 };
 
 export const getApiKeySync = () => {
-    return cachedApiKey || localStorage.getItem('stylevision_api_key_override');
+    return HARDCODED_KEY;
 }
 
 const SAFETY_SETTINGS = [
@@ -146,9 +88,7 @@ export const analyzeUserImage = async (base64Image: string, mode: AnalysisMode =
     };
   }
 
-  const apiKey = await getOrFetchApiKey();
-  if (!apiKey) throw new Error("Системная ошибка: API Key не настроен. Обратитесь к администратору.");
-
+  const apiKey = HARDCODED_KEY;
   const ai = new GoogleGenAI({ apiKey });
   
   let promptInstructions = "";
@@ -219,9 +159,7 @@ export const getStyleRecommendations = async (
     return [];
   }
 
-  const apiKey = await getOrFetchApiKey();
-  if (!apiKey) throw new Error("API Key missing");
-  
+  const apiKey = HARDCODED_KEY;
   const ai = new GoogleGenAI({ apiKey });
   const activeStores = stores.filter(s => s.isSelected);
   const siteOperators = activeStores.length > 0 ? activeStores.map(s => `site:${s.domain}`).join(' OR ') : '';
@@ -287,9 +225,7 @@ export const getStyleRecommendations = async (
 export const findShoppingProducts = async (itemQuery: string): Promise<ShoppingProduct[]> => {
   if (IS_DEMO_MODE) return [];
 
-  const apiKey = await getOrFetchApiKey();
-  if (!apiKey) return [];
-
+  const apiKey = HARDCODED_KEY;
   const ai = new GoogleGenAI({ apiKey });
   const prompt = `
     TASK: Fast Product Search. QUERY: "${itemQuery}". MARKET: Russia.
@@ -319,9 +255,7 @@ export const findShoppingProducts = async (itemQuery: string): Promise<ShoppingP
 export const editUserImage = async (base64Image: string, textPrompt: string, maskImage?: string): Promise<string> => {
   if (IS_DEMO_MODE) return base64Image;
 
-  const apiKey = await getOrFetchApiKey();
-  if (!apiKey) throw new Error("API Key missing");
-
+  const apiKey = HARDCODED_KEY;
   const ai = new GoogleGenAI({ apiKey });
   const model = 'gemini-2.5-flash-image';
 

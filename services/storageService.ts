@@ -3,7 +3,7 @@ import { supabase } from './supabaseClient';
 
 // Fallback to localStorage if Supabase fails or keys are missing
 const STORAGE_PREFIX = 'stylevision_';
-const SYSTEM_USER_ID = -100; // Special ID for system config
+const SYSTEM_USER_ID = -100; 
 
 export const storageService = {
   
@@ -31,13 +31,15 @@ export const storageService = {
 
   getUser: async (userId: number): Promise<TelegramUser | null> => {
     try {
+      // Use maybeSingle() instead of single() to avoid 406 Not Acceptable errors on zero rows
       const { data, error } = await supabase
         .from('users')
         .select('*')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
         
-      if (error || !data) throw error;
+      if (error) throw error;
+      if (!data) throw new Error("User not found");
 
       return {
           id: data.id,
@@ -74,7 +76,7 @@ export const storageService = {
             .from('users')
             .select('is_pro')
             .eq('id', userId)
-            .single();
+            .maybeSingle(); // Robust handling
 
         if (error) throw error;
         return data?.is_pro || false;
@@ -153,47 +155,16 @@ export const storageService = {
     }
   },
 
-  // --- GLOBAL SYSTEM CONFIG (API KEY SHARING) ---
+  // --- GLOBAL SYSTEM CONFIG (LEGACY/REMOVED FUNCTIONALITY) ---
+  // Kept as stubs to prevent breaking imports if any files reference them
   saveGlobalApiKey: async (apiKey: string) => {
-      try {
-          // We use a special system user ID (-100) to store the API key in the 'first_name' field
-          // This is a hack to use existing tables without schema migration
-          const { error } = await supabase
-              .from('users')
-              .upsert({
-                  id: SYSTEM_USER_ID,
-                  first_name: apiKey, 
-                  last_name: 'SYSTEM_CONFIG',
-                  username: 'system_key_store',
-                  is_guest: true
-              });
-          
-          if (error) throw error;
-          console.log("Global API Key saved to database");
-          return true;
-      } catch (e) {
-          console.error("Failed to save global key:", e);
-          return false;
-      }
+      // Disabled since we are hardcoding
+      return true;
   },
 
   getGlobalApiKey: async (): Promise<string | null> => {
-      try {
-          const { data, error } = await supabase
-              .from('users')
-              .select('first_name')
-              .eq('id', SYSTEM_USER_ID)
-              .single();
-
-          if (error) return null;
-          // Validate it looks like a key
-          if (data?.first_name && data.first_name.startsWith('AIza')) {
-              return data.first_name;
-          }
-          return null;
-      } catch (e) {
-          return null;
-      }
+      // Disabled since we are hardcoding
+      return null;
   },
 
   // --- ADMIN FUNCTIONS ---
@@ -202,7 +173,7 @@ export const storageService = {
          const { data, error } = await supabase
             .from('users')
             .select('*')
-            .neq('id', SYSTEM_USER_ID) // Hide the system user
+            .neq('id', SYSTEM_USER_ID)
             .order('created_at', { ascending: false })
             .limit(50);
          
