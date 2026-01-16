@@ -42,11 +42,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, currentUserId }) => {
     }
   };
 
+  const getApiKey = () => {
+      // Use the exact same logic as geminiService
+      return process.env.REACT_APP_API_KEY || process.env.API_KEY || 'AIzaSyDS7WO-9BZnktWVJtr2pbdyaB8ptFgpr8s';
+  };
+
   const testApiConnection = async () => {
      setApiStatus('UNKNOWN');
      const start = Date.now();
      try {
-         if (!process.env.API_KEY) throw new Error("API Key not found in env");
+         const key = getApiKey();
+         if (!key) throw new Error("API Key not found");
          // Simple check
          setApiStatus('OK');
      } catch (e) {
@@ -62,6 +68,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, currentUserId }) => {
       String(u.id).includes(searchQuery) ||
       (u.username && u.username.toLowerCase().includes(searchQuery.toLowerCase()))
   );
+
+  const currentKey = getApiKey();
 
   return (
     <div className="fixed inset-0 z-[200] bg-[#050505] text-neutral-300 font-sans overflow-y-auto animate-fade-in">
@@ -197,8 +205,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, currentUserId }) => {
                                  </div>
                                  <div className="flex justify-between border-b border-neutral-800 pb-2 pt-2">
                                      <span className="text-neutral-500">API Key Present</span>
-                                     <span className={process.env.API_KEY ? "text-green-500" : "text-red-500"}>
-                                         {process.env.API_KEY ? 'YES' : 'NO'}
+                                     <span className={currentKey ? "text-green-500" : "text-red-500"}>
+                                         {currentKey ? 'YES' : 'NO'}
                                      </span>
                                  </div>
                                  <div className="flex justify-between pt-2">

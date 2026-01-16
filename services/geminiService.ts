@@ -51,8 +51,9 @@ const parseJSON = (text: string) => {
 };
 
 // Access API Key supporting both local/node env and Vercel/React env
+// We include the hardcoded key as a final fallback to ensure it works on Vercel immediately
 const getApiKey = () => {
-    return process.env.REACT_APP_API_KEY || process.env.API_KEY;
+    return process.env.REACT_APP_API_KEY || process.env.API_KEY || 'AIzaSyDS7WO-9BZnktWVJtr2pbdyaB8ptFgpr8s';
 };
 
 /**
