@@ -59,15 +59,17 @@ const parseJSON = (text: string) => {
   }
 };
 
-// Access API Key supporting both local/node env and Vercel/React env
-// We include the hardcoded key as a final fallback to ensure it works on Vercel immediately
+// Access API Key from Environment Variables ONLY.
+// NEVER hardcode keys starting with 'AIza' in the source code.
 const getApiKey = () => {
-    // Prioritize environment variables
-    const envKey = process.env.REACT_APP_API_KEY || process.env.API_KEY;
-    if (envKey && envKey.length > 10) return envKey;
+    // Check standard React/Vercel env var
+    const key = process.env.REACT_APP_API_KEY || process.env.API_KEY;
     
-    // Fallback key
-    return 'AIzaSyDS7WO-9BZnktWVJtr2pbdyaB8ptFgpr8s';
+    if (!key || key.includes("AIzaSyDS7WO")) {
+        // Check if it's the old leaked key or missing
+        return null;
+    }
+    return key;
 };
 
 // SAFETY SETTINGS: Disable blocks to allow analyzing human photos
@@ -95,7 +97,7 @@ export const analyzeUserImage = async (base64Image: string, mode: AnalysisMode =
   }
 
   const apiKey = getApiKey();
-  if (!apiKey) throw new Error("API Key missing.");
+  if (!apiKey) throw new Error("API Key не настроен. Добавьте REACT_APP_API_KEY в переменные окружения Vercel.");
 
   const ai = new GoogleGenAI({ apiKey });
   
@@ -181,6 +183,8 @@ export const getStyleRecommendations = async (
   }
 
   const apiKey = getApiKey();
+  if (!apiKey) throw new Error("API Key missing");
+  
   const ai = new GoogleGenAI({ apiKey });
   const activeStores = stores.filter(s => s.isSelected);
   const siteOperators = activeStores.length > 0 ? activeStores.map(s => `site:${s.domain}`).join(' OR ') : '';
@@ -251,6 +255,8 @@ export const findShoppingProducts = async (itemQuery: string): Promise<ShoppingP
   if (IS_DEMO_MODE) return [];
 
   const apiKey = getApiKey();
+  if (!apiKey) return [];
+
   const ai = new GoogleGenAI({ apiKey });
   const prompt = `
     TASK: Fast Product Search. QUERY: "${itemQuery}". MARKET: Russia.
@@ -286,6 +292,8 @@ export const editUserImage = async (base64Image: string, textPrompt: string, mas
   if (IS_DEMO_MODE) return base64Image;
 
   const apiKey = getApiKey();
+  if (!apiKey) throw new Error("API Key missing");
+
   const ai = new GoogleGenAI({ apiKey });
   const model = 'gemini-2.5-flash-image';
 

@@ -43,8 +43,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, currentUserId }) => {
   };
 
   const getApiKey = () => {
-      // Use the exact same logic as geminiService
-      return process.env.REACT_APP_API_KEY || process.env.API_KEY || 'AIzaSyDS7WO-9BZnktWVJtr2pbdyaB8ptFgpr8s';
+      // Strictly from env vars, no leaked fallbacks
+      return process.env.REACT_APP_API_KEY || process.env.API_KEY || '';
   };
 
   const testApiConnection = async () => {
@@ -52,7 +52,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, currentUserId }) => {
      const start = Date.now();
      try {
          const key = getApiKey();
-         if (!key) throw new Error("API Key not found");
+         if (!key || key.includes('AIzaSyDS7WO')) throw new Error("API Key not found or invalid");
          // Simple check
          setApiStatus('OK');
      } catch (e) {
@@ -70,6 +70,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, currentUserId }) => {
   );
 
   const currentKey = getApiKey();
+  const hasKey = currentKey && currentKey.length > 10 && !currentKey.includes('AIzaSyDS7WO');
 
   return (
     <div className="fixed inset-0 z-[200] bg-[#050505] text-neutral-300 font-sans overflow-y-auto animate-fade-in">
@@ -204,9 +205,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, currentUserId }) => {
                                      </span>
                                  </div>
                                  <div className="flex justify-between border-b border-neutral-800 pb-2 pt-2">
-                                     <span className="text-neutral-500">API Key Present</span>
-                                     <span className={currentKey ? "text-green-500" : "text-red-500"}>
-                                         {currentKey ? 'YES' : 'NO'}
+                                     <span className="text-neutral-500">API Key Configured</span>
+                                     <span className={hasKey ? "text-green-500" : "text-red-500"}>
+                                         {hasKey ? 'YES' : 'NO (Missing or Leaked)'}
                                      </span>
                                  </div>
                                  <div className="flex justify-between pt-2">
