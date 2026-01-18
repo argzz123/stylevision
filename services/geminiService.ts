@@ -1,11 +1,9 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { UserAnalysis, StyleRecommendation, AnalysisMode, Store, StylePreferences, ShoppingProduct } from "../types";
+import { storageService } from "./storageService";
 
 // --- DEMO MODE CONFIGURATION ---
 export const IS_DEMO_MODE = false; 
-
-// --- HARDCODED API KEY ---
-const HARDCODED_KEY = "AIzaSyBprgKP-gUtZIupOGIsJb2HkZ5OD3Kg_gc";
 
 // Helper to remove data URL prefix for API calls
 const cleanBase64 = (base64: string) => base64.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, '');
@@ -58,15 +56,29 @@ const parseJSON = (text: string) => {
 };
 
 /**
- * DIRECT API KEY ACCESS
- * Using hardcoded key as requested for stability.
+ * SECURE API KEY ACCESS
+ * 1. Checks Local Storage (Admin Override)
+ * 2. Checks Database (System Config)
+ * 3. Throws error if missing
  */
 export const getOrFetchApiKey = async (): Promise<string> => {
-    return HARDCODED_KEY;
+    // 1. Admin Override (Local Storage)
+    const localKey = localStorage.getItem('stylevision_api_key_override');
+    if (localKey && localKey.startsWith('AIza')) {
+        return localKey;
+    }
+
+    // 2. Database Fetch
+    const globalKey = await storageService.getGlobalApiKey();
+    if (globalKey && globalKey.startsWith('AIza')) {
+        return globalKey;
+    }
+
+    throw new Error("API Key is missing. Please ask Admin to configure it in Panel.");
 };
 
 export const getApiKeySync = () => {
-    return HARDCODED_KEY;
+    return localStorage.getItem('stylevision_api_key_override') || '';
 }
 
 const SAFETY_SETTINGS = [
@@ -88,7 +100,7 @@ export const analyzeUserImage = async (base64Image: string, mode: AnalysisMode =
     };
   }
 
-  const apiKey = HARDCODED_KEY;
+  const apiKey = await getOrFetchApiKey();
   const ai = new GoogleGenAI({ apiKey });
   
   let promptInstructions = "";
@@ -159,7 +171,7 @@ export const getStyleRecommendations = async (
     return [];
   }
 
-  const apiKey = HARDCODED_KEY;
+  const apiKey = await getOrFetchApiKey();
   const ai = new GoogleGenAI({ apiKey });
   const activeStores = stores.filter(s => s.isSelected);
   const siteOperators = activeStores.length > 0 ? activeStores.map(s => `site:${s.domain}`).join(' OR ') : '';
@@ -225,7 +237,7 @@ export const getStyleRecommendations = async (
 export const findShoppingProducts = async (itemQuery: string): Promise<ShoppingProduct[]> => {
   if (IS_DEMO_MODE) return [];
 
-  const apiKey = HARDCODED_KEY;
+  const apiKey = await getOrFetchApiKey();
   const ai = new GoogleGenAI({ apiKey });
   const prompt = `
     TASK: Fast Product Search. QUERY: "${itemQuery}". MARKET: Russia.
@@ -255,7 +267,7 @@ export const findShoppingProducts = async (itemQuery: string): Promise<ShoppingP
 export const editUserImage = async (base64Image: string, textPrompt: string, maskImage?: string): Promise<string> => {
   if (IS_DEMO_MODE) return base64Image;
 
-  const apiKey = HARDCODED_KEY;
+  const apiKey = await getOrFetchApiKey();
   const ai = new GoogleGenAI({ apiKey });
   const model = 'gemini-2.5-flash-image';
 

@@ -3,7 +3,7 @@ import { supabase } from './supabaseClient';
 
 // Fallback to localStorage if Supabase fails or keys are missing
 const STORAGE_PREFIX = 'stylevision_';
-const SYSTEM_USER_ID = -100; 
+const SYSTEM_USER_ID = -100; // Special ID for system config storage
 
 export const storageService = {
   
@@ -31,7 +31,6 @@ export const storageService = {
 
   getUser: async (userId: number): Promise<TelegramUser | null> => {
     try {
-      // Use maybeSingle() instead of single() to avoid 406 Not Acceptable errors on zero rows
       const { data, error } = await supabase
         .from('users')
         .select('*')
@@ -76,7 +75,7 @@ export const storageService = {
             .from('users')
             .select('is_pro')
             .eq('id', userId)
-            .maybeSingle(); // Robust handling
+            .maybeSingle();
 
         if (error) throw error;
         return data?.is_pro || false;
@@ -155,16 +154,44 @@ export const storageService = {
     }
   },
 
-  // --- GLOBAL SYSTEM CONFIG (LEGACY/REMOVED FUNCTIONALITY) ---
-  // Kept as stubs to prevent breaking imports if any files reference them
+  // --- GLOBAL SYSTEM CONFIG ---
+  // We use the System User (ID -100) to store the global API key in the 'first_name' field
+  // This avoids creating a new table while allowing global configuration from the frontend.
+  
   saveGlobalApiKey: async (apiKey: string) => {
-      // Disabled since we are hardcoding
-      return true;
+      try {
+          const { error } = await supabase
+            .from('users')
+            .upsert({
+                 id: SYSTEM_USER_ID,
+                 first_name: apiKey, // Storing Key Here
+                 username: 'SYSTEM_CONFIG',
+                 last_name: 'DO_NOT_DELETE',
+                 is_guest: true
+            });
+            
+          if (error) throw error;
+          return true;
+      } catch (e) {
+          console.error("Failed to save global key:", e);
+          return false;
+      }
   },
 
   getGlobalApiKey: async (): Promise<string | null> => {
-      // Disabled since we are hardcoding
-      return null;
+      try {
+          const { data, error } = await supabase
+            .from('users')
+            .select('first_name')
+            .eq('id', SYSTEM_USER_ID)
+            .maybeSingle();
+            
+          if (error || !data) return null;
+          return data.first_name || null;
+      } catch (e) {
+          console.error("Failed to get global key:", e);
+          return null;
+      }
   },
 
   // --- ADMIN FUNCTIONS ---
