@@ -142,7 +142,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isOverlay = false, o
                   <p className="text-amber-500 font-bold mb-1">СВЕРЬТЕ С BOTFATHER:</p>
                   <p className="mb-1">Ваш Hostname: <span className="text-white font-mono bg-black px-1 rounded select-all">{currentDomain}</span></p>
                   <p className="leading-relaxed opacity-80">
-                     В настройках бота (/mybots -> Bot Settings -> Domain) укажите только <strong>{currentDomain}</strong>. Без https:// и без слэшей в конце.
+                     В настройках бота (/mybots &rarr; Bot Settings &rarr; Domain) укажите только <strong>{currentDomain}</strong>. Без https:// и без слэшей в конце.
                   </p>
                </div>
 
