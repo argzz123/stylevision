@@ -38,7 +38,7 @@ const StyleCard: React.FC<StyleCardProps> = ({
 
     // 3. Construct Query
     const query = `${searchDomain}${itemName} купить`;
-    const url = `https://www.google.com/search?q=${encodeURIComponent(query)}&tbm=isch`; // tbm=isch opens Images tab which is better for visual shopping
+    const url = `https://www.google.com/search?q=${encodeURIComponent(query)}&tbm=isch`; 
 
     // 4. Open
     window.open(url, '_blank');
@@ -51,10 +51,11 @@ const StyleCard: React.FC<StyleCardProps> = ({
     <div 
       onClick={!isProcessingGlobal ? onClick : undefined}
       className={`
-        rounded-xl border p-4 md:p-6 transition-all duration-300 relative group flex flex-col shadow-sm h-auto overflow-visible
+        rounded-xl border p-4 md:p-6 relative flex flex-col h-auto
+        transition-colors duration-200
         ${isSelected 
-          ? 'bg-[#0a0a0a] border-amber-500/80 shadow-[0_0_20px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/50 z-10 scale-[1.01]' 
-          : 'bg-[#0f0f0f]/80 border-neutral-800 hover:border-neutral-700 hover:bg-[#151515] opacity-80 hover:opacity-100 scale-100 z-0'}
+          ? 'bg-[#121212] border-amber-500/80 shadow-[0_4px_20px_rgba(245,158,11,0.15)] z-10' 
+          : 'bg-[#0f0f0f]/80 border-neutral-800 hover:border-neutral-700 hover:bg-[#151515] opacity-90 z-0'}
         ${isProcessingGlobal && !isSelected ? 'opacity-50 cursor-not-allowed grayscale' : 'cursor-pointer'}
       `}
     >
@@ -64,7 +65,8 @@ const StyleCard: React.FC<StyleCardProps> = ({
         </h3>
       </div>
       
-      <p className="text-neutral-400 text-xs md:text-sm mb-4 leading-relaxed font-light line-clamp-2">
+      {/* Remove line-clamp when selected so full description is visible */}
+      <p className={`text-neutral-400 text-xs md:text-sm mb-4 leading-relaxed font-light ${isSelected ? '' : 'line-clamp-2'}`}>
         {safeDescription}
       </p>
       
@@ -119,9 +121,9 @@ const StyleCard: React.FC<StyleCardProps> = ({
             e.stopPropagation();
             onApplyStyle();
           }}
-          disabled={isProcessingGlobal} // Disable if ANY generation is happening
+          disabled={isProcessingGlobal} 
           className={`
-            w-full mt-4 font-semibold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-3 text-sm tracking-wide uppercase shadow-lg mb-2
+            w-full mt-auto font-semibold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-3 text-sm tracking-wide uppercase shadow-lg mb-1
             ${isProcessingGlobal 
                 ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed' 
                 : 'bg-amber-600 hover:bg-amber-500 text-black shadow-amber-900/20'}
