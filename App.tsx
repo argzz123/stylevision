@@ -688,7 +688,7 @@ const App: React.FC = () => {
                                 <p>• Безлимитная генерация образов</p>
                                 <p>• Приоритетная обработка (без очереди)</p>
                                 <p>• Доступ к функции примерки (Virtual Try-On)</p>
-                               </>
+                                </>
                            )}
                         </div>
                     </div>
@@ -943,7 +943,7 @@ const App: React.FC = () => {
                </div>
 
                {/* Right/Second Column: Collection */}
-               <div className={`md:col-span-7 pb-24 md:pb-0 ${activeMobileTab === 'COLLECTION' ? 'block' : 'hidden md:block'}`}>
+               <div className={`md:col-span-7 pb-48 md:pb-0 ${activeMobileTab === 'COLLECTION' ? 'block' : 'hidden md:block'}`}>
                   <div className="mb-6 flex justify-between items-end">
                      <div>
                         <span className="text-amber-500 text-xs font-bold uppercase tracking-widest">Коллекция</span>

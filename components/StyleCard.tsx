@@ -51,10 +51,10 @@ const StyleCard: React.FC<StyleCardProps> = ({
     <div 
       onClick={!isProcessingGlobal ? onClick : undefined}
       className={`
-        rounded-xl border p-4 md:p-6 transition-all duration-300 relative overflow-hidden group flex flex-col shadow-sm
+        rounded-xl border p-4 md:p-6 transition-all duration-300 relative group flex flex-col shadow-sm h-auto overflow-visible
         ${isSelected 
           ? 'bg-[#0a0a0a] border-amber-500/80 shadow-[0_0_20px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/50 z-10 scale-[1.01]' 
-          : 'bg-[#0f0f0f]/80 border-neutral-800 hover:border-neutral-700 hover:bg-[#151515] opacity-80 hover:opacity-100 scale-100'}
+          : 'bg-[#0f0f0f]/80 border-neutral-800 hover:border-neutral-700 hover:bg-[#151515] opacity-80 hover:opacity-100 scale-100 z-0'}
         ${isProcessingGlobal && !isSelected ? 'opacity-50 cursor-not-allowed grayscale' : 'cursor-pointer'}
       `}
     >
@@ -68,7 +68,7 @@ const StyleCard: React.FC<StyleCardProps> = ({
         {safeDescription}
       </p>
       
-      <div className="flex gap-2 mb-5 overflow-x-auto pb-2 scrollbar-hide">
+      <div className="flex gap-2 mb-5 overflow-x-auto pb-4 scrollbar-hide">
         {style.colorPalette?.map((color, idx) => (
           <div 
             key={idx} 
@@ -78,7 +78,7 @@ const StyleCard: React.FC<StyleCardProps> = ({
         ))}
       </div>
 
-      <div className="space-y-3 mb-6 border-t border-neutral-800 pt-4 flex-grow">
+      <div className="space-y-3 mb-6 border-t border-neutral-800 pt-4">
         <h4 className="text-[10px] font-bold text-neutral-500 uppercase tracking-[0.2em] mb-2">Гардероб (Нажмите для поиска)</h4>
         <ul className="space-y-2">
           {style.items?.map((item, idx) => (
@@ -121,7 +121,7 @@ const StyleCard: React.FC<StyleCardProps> = ({
           }}
           disabled={isProcessingGlobal} // Disable if ANY generation is happening
           className={`
-            w-full mt-auto font-semibold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-3 text-sm tracking-wide uppercase shadow-lg
+            w-full mt-4 font-semibold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-3 text-sm tracking-wide uppercase shadow-lg mb-2
             ${isProcessingGlobal 
                 ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed' 
                 : 'bg-amber-600 hover:bg-amber-500 text-black shadow-amber-900/20'}

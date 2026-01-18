@@ -148,18 +148,23 @@ export const analyzeUserImage = async (base64Image: string, mode: AnalysisMode =
 
   let promptInstructions = "";
   if (mode === 'OBJECTIVE') {
+    // SAFE OBJECTIVE PROMPT: Focuses on geometry and balance, avoiding judgmental terms.
     promptInstructions = `
-      ROLE: Elite High-Fashion Stylist.
-      MODE: OBJECTIVE, STRICT, CORRECTIVE.
-      TASK: Analyze body proportions, face shape, and suggest corrections.
-      TONE: Professional, direct, honest (Russian language).
+      ROLE: Technical Image Consultant.
+      MODE: OBJECTIVE, ANALYTICAL, GEOMETRIC.
+      TASK: Analyze body geometry, vertical proportions, and color contrast.
+      GUIDELINES: 
+      1. Use neutral, anatomical terminology (e.g., "soft lines", "structured shoulders", "balanced proportions").
+      2. Avoid negative labels (never use "fat", "short", "bad", "problem").
+      3. Focus on maximizing aesthetic balance using composition rules.
+      TONE: Professional, factual, dry, respectful (Russian language).
     `;
   } else {
     promptInstructions = `
       ROLE: Personal Luxury Shopper.
       MODE: STANDARD, ENHANCING.
       TASK: Identify body type, season, and suggest enhancing styles.
-      TONE: Inspiring, helpful (Russian language).
+      TONE: Inspiring, helpful, complimentary (Russian language).
     `;
   }
 
@@ -217,16 +222,6 @@ export const getStyleRecommendations = async (
   const siteOperators = activeStores.length > 0 ? activeStores.map(s => `site:${s.domain}`).join(' OR ') : '';
   const storeInstruction = siteOperators ? `SEARCH INSTRUCTIONS: Search ONLY within these domains: ${activeStores.map(s => s.name).join(', ')} using query operator "(${siteOperators})".` : '';
   
-  const prompt = `
-    ROLE: World-Class Fashion Stylist.
-    CLIENT PROFILE: ${analysis.gender}, ${analysis.bodyType}, ${analysis.seasonalColor}.
-    CONTEXT: Season ${preferences.season}, Occasion ${preferences.occasion}.
-    ${storeInstruction}
-    TASK: Create 4 DISTINCT, COMPLETE "TOTAL LOOKS".
-    RULES: 5-8 items per look. Must include Accessories.
-    IMPORTANT: Provide a creative 'title' for each look in Russian.
-  `;
-
   const schema: Schema = {
     type: Type.ARRAY,
     items: {
@@ -254,7 +249,8 @@ export const getStyleRecommendations = async (
     }
   };
 
-  try {
+  // Internal function to make the call
+  const attemptGeneration = async (prompt: string) => {
       const response = await callGeminiProxy(
           'gemini-3-flash-preview', 
           { parts: [{ text: prompt }] },
@@ -264,12 +260,43 @@ export const getStyleRecommendations = async (
           },
           [{ googleSearch: {} }] // tools
       );
-
       if (response.text) return parseJSON(response.text) as StyleRecommendation[];
       throw new Error("No style data returned");
+  };
+
+  try {
+      // 1. First Attempt: Context Aware
+      // We purposefully do NOT pass the full raw "detailedDescription" if it is potentially unsafe.
+      // Instead, we pass the key structural params and a sanitized instruction.
+      const prompt = `
+        ROLE: World-Class Fashion Stylist.
+        CLIENT PROFILE: ${analysis.gender}, ${analysis.bodyType}, ${analysis.seasonalColor}.
+        CONTEXT: Season ${preferences.season}, Occasion ${preferences.occasion}.
+        STYLE KEYWORDS: ${analysis.styleKeywords.join(', ')}.
+        ${storeInstruction}
+        TASK: Create 4 DISTINCT, COMPLETE "TOTAL LOOKS".
+        RULES: 5-8 items per look. Must include Accessories.
+        IMPORTANT: Provide a creative 'title' for each look in Russian.
+      `;
+      return await attemptGeneration(prompt);
+
   } catch (error: any) {
-      console.error("Style Gen Error:", error);
-      throw new Error(`Ошибка генерации стиля: ${error.message}`);
+      console.warn("Primary generation failed (likely safety block), attempting fallback...");
+      
+      try {
+          // 2. Fallback Attempt: Simplified Context
+          const safePrompt = `
+            ROLE: Fashion Stylist.
+            TASK: Suggest 4 complete outfits for ${analysis.gender}.
+            CONTEXT: Season ${preferences.season}, Occasion ${preferences.occasion}.
+            ${storeInstruction}
+            RULES: Return JSON matching schema. Russian language.
+          `;
+          return await attemptGeneration(safePrompt);
+      } catch (retryError: any) {
+          console.error("Fallback generation failed:", retryError);
+          throw new Error(`Не удалось подобрать образы. Попробуйте изменить сезон или событие.`);
+      }
   }
 };
 
