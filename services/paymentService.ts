@@ -20,7 +20,8 @@ export interface PaymentResponse {
  */
 export const createPayment = async (amount: string, description: string): Promise<PaymentResponse> => {
   
-  const SERVER_URL = '/api/create-payment';
+  // UPDATED: Absolute URL for Vercel
+  const SERVER_URL = 'https://stylevision.vercel.app/api/create-payment';
 
   // We do NOT add 'payment_processed=true' here manually anymore to prevent fake success.
   // We just return to the app, and the app will check localStorage for pending payment IDs.
@@ -65,7 +66,8 @@ export const createPayment = async (amount: string, description: string): Promis
  */
 export const checkPaymentStatus = async (paymentId: string): Promise<boolean> => {
     try {
-        const response = await fetch('/api/check-payment', {
+        // UPDATED: Absolute URL for Vercel
+        const response = await fetch('https://stylevision.vercel.app/api/check-payment', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ paymentId })

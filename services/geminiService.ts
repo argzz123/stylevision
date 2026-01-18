@@ -106,7 +106,8 @@ const callGeminiProxy = async (model: string, contents: any, generationConfig?: 
         (payload as any).tools = tools;
     }
 
-    const response = await fetch('/api/gemini-proxy', {
+    // UPDATED: Use absolute URL for Vercel Backend
+    const response = await fetch('https://stylevision.vercel.app/api/gemini-proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
