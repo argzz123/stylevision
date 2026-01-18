@@ -1,4 +1,5 @@
-import { GoogleGenAI, Type, Schema } from "@google/genai";
+
+import { Type, Schema } from "@google/genai";
 import { UserAnalysis, StyleRecommendation, AnalysisMode, Store, StylePreferences, ShoppingProduct } from "../types";
 import { storageService } from "./storageService";
 
@@ -57,9 +58,6 @@ const parseJSON = (text: string) => {
 
 /**
  * SECURE API KEY ACCESS
- * 1. Checks Local Storage (Admin Override)
- * 2. Checks Database (System Config)
- * 3. Throws error if missing
  */
 export const getOrFetchApiKey = async (): Promise<string> => {
     // 1. Admin Override (Local Storage)
@@ -88,6 +86,54 @@ const SAFETY_SETTINGS = [
   { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
 ];
 
+/**
+ * PROXY HELPER
+ * Sends data to our Vercel /api/gemini-proxy endpoint.
+ * This ensures the request comes from Vercel's IP (US/EU), bypassing user location blocks.
+ */
+const callGeminiProxy = async (model: string, contents: any, generationConfig?: any, tools?: any) => {
+    const apiKey = await getOrFetchApiKey();
+    
+    // Construct the payload as the REST API expects it
+    const payload = {
+        contents: contents,
+        safetySettings: SAFETY_SETTINGS,
+        generationConfig: generationConfig || {},
+    };
+
+    // Add tools if present (Google Search, etc)
+    if (tools) {
+        (payload as any).tools = tools;
+    }
+
+    const response = await fetch('/api/gemini-proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            apiKey,
+            model,
+            data: payload
+        })
+    });
+
+    if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error?.message || err.error || 'Proxy Error');
+    }
+
+    const result = await response.json();
+    
+    // Extract text from standard REST response structure
+    // candidates[0].content.parts[0].text
+    const text = result.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join('') || '';
+    
+    // Return an object mimicking the SDK response for compatibility
+    return {
+        text,
+        candidates: result.candidates
+    };
+};
+
 export const analyzeUserImage = async (base64Image: string, mode: AnalysisMode = 'STANDARD'): Promise<UserAnalysis> => {
   if (IS_DEMO_MODE) {
     await new Promise(resolve => setTimeout(resolve, 2000));
@@ -100,9 +146,6 @@ export const analyzeUserImage = async (base64Image: string, mode: AnalysisMode =
     };
   }
 
-  const apiKey = await getOrFetchApiKey();
-  const ai = new GoogleGenAI({ apiKey });
-  
   let promptInstructions = "";
   if (mode === 'OBJECTIVE') {
     promptInstructions = `
@@ -127,30 +170,29 @@ export const analyzeUserImage = async (base64Image: string, mode: AnalysisMode =
   `;
 
   try {
-    const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview', 
-        contents: {
-          parts: [
-              { inlineData: { mimeType: getMimeType(base64Image), data: cleanBase64(base64Image) } },
-              { text: prompt }
-          ]
-        },
-        config: {
-          responseMimeType: "application/json",
-          safetySettings: SAFETY_SETTINGS,
-          responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-              gender: { type: Type.STRING },
-              bodyType: { type: Type.STRING },
-              seasonalColor: { type: Type.STRING },
-              styleKeywords: { type: Type.ARRAY, items: { type: Type.STRING } },
-              detailedDescription: { type: Type.STRING }
-              },
-              required: ["gender", "bodyType", "seasonalColor", "styleKeywords", "detailedDescription"]
-          }
+    const contents = {
+        parts: [
+            { inlineData: { mimeType: getMimeType(base64Image), data: cleanBase64(base64Image) } },
+            { text: prompt }
+        ]
+    };
+
+    const generationConfig = {
+        responseMimeType: "application/json",
+        responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+                gender: { type: Type.STRING },
+                bodyType: { type: Type.STRING },
+                seasonalColor: { type: Type.STRING },
+                styleKeywords: { type: Type.ARRAY, items: { type: Type.STRING } },
+                detailedDescription: { type: Type.STRING }
+            },
+            required: ["gender", "bodyType", "seasonalColor", "styleKeywords", "detailedDescription"]
         }
-    });
+    };
+
+    const response = await callGeminiProxy('gemini-3-flash-preview', contents, generationConfig);
 
     if (response.text) return parseJSON(response.text) as UserAnalysis;
     throw new Error(`Пустой ответ от ИИ.`);
@@ -171,8 +213,6 @@ export const getStyleRecommendations = async (
     return [];
   }
 
-  const apiKey = await getOrFetchApiKey();
-  const ai = new GoogleGenAI({ apiKey });
   const activeStores = stores.filter(s => s.isSelected);
   const siteOperators = activeStores.length > 0 ? activeStores.map(s => `site:${s.domain}`).join(' OR ') : '';
   const storeInstruction = siteOperators ? `SEARCH INSTRUCTIONS: Search ONLY within these domains: ${activeStores.map(s => s.name).join(', ')} using query operator "(${siteOperators})".` : '';
@@ -215,16 +255,15 @@ export const getStyleRecommendations = async (
   };
 
   try {
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: prompt,
-        config: { 
-            responseMimeType: "application/json",
-            safetySettings: SAFETY_SETTINGS,
-            responseSchema: schema,
-            tools: [{ googleSearch: {} }] 
-        }
-      });
+      const response = await callGeminiProxy(
+          'gemini-3-flash-preview', 
+          { parts: [{ text: prompt }] },
+          { 
+              responseMimeType: "application/json",
+              responseSchema: schema
+          },
+          [{ googleSearch: {} }] // tools
+      );
 
       if (response.text) return parseJSON(response.text) as StyleRecommendation[];
       throw new Error("No style data returned");
@@ -237,22 +276,18 @@ export const getStyleRecommendations = async (
 export const findShoppingProducts = async (itemQuery: string): Promise<ShoppingProduct[]> => {
   if (IS_DEMO_MODE) return [];
 
-  const apiKey = await getOrFetchApiKey();
-  const ai = new GoogleGenAI({ apiKey });
   const prompt = `
     TASK: Fast Product Search. QUERY: "${itemQuery}". MARKET: Russia.
     Identify 3 POPULAR, REAL product options. Return JSON: title, price, store, imageUrl.
   `;
 
   try {
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview', 
-        contents: prompt,
-        config: { 
-            safetySettings: SAFETY_SETTINGS,
-            tools: [{ googleSearch: {} }] 
-        }
-      });
+      const response = await callGeminiProxy(
+          'gemini-3-flash-preview',
+          { parts: [{ text: prompt }] },
+          {}, // config
+          [{ googleSearch: {} }] // tools
+      );
 
       if (response.text) {
         const products = parseJSON(response.text) as ShoppingProduct[];
@@ -267,8 +302,6 @@ export const findShoppingProducts = async (itemQuery: string): Promise<ShoppingP
 export const editUserImage = async (base64Image: string, textPrompt: string, maskImage?: string): Promise<string> => {
   if (IS_DEMO_MODE) return base64Image;
 
-  const apiKey = await getOrFetchApiKey();
-  const ai = new GoogleGenAI({ apiKey });
   const model = 'gemini-2.5-flash-image';
 
   const parts: any[] = [
@@ -282,14 +315,19 @@ export const editUserImage = async (base64Image: string, textPrompt: string, mas
   parts.push({ text: textPrompt });
 
   try {
-    const response = await ai.models.generateContent({
-      model: model,
-      contents: { parts },
-      config: { safetySettings: SAFETY_SETTINGS }
-    });
+    const response = await callGeminiProxy(
+        model,
+        { parts: parts }
+    );
 
-    for (const part of response.candidates?.[0]?.content?.parts || []) {
-      if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
+    // Parse image from response candidates
+    // REST API returns image bytes in inlineData
+    for (const candidate of response.candidates || []) {
+        for (const part of candidate.content.parts || []) {
+            if (part.inlineData) {
+                return `data:image/png;base64,${part.inlineData.data}`;
+            }
+        }
     }
     throw new Error("No image data in response");
   } catch (error: any) {
