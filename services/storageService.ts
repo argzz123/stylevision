@@ -1,9 +1,17 @@
+
 import { TelegramUser, HistoryItem } from '../types';
 import { supabase } from './supabaseClient';
 
 // Fallback to localStorage if Supabase fails or keys are missing
 const STORAGE_PREFIX = 'stylevision_';
 const SYSTEM_USER_ID = -100; // Special ID for system config storage
+
+export interface GlobalConfig {
+    price: string;
+    productTitle: string;
+    productDescription: string;
+    maintenanceMode: boolean; // New field
+}
 
 export const storageService = {
   
@@ -18,7 +26,8 @@ export const storageService = {
           last_name: user.last_name,
           username: user.username,
           photo_url: user.photo_url,
-          is_guest: user.isGuest || false
+          is_guest: user.isGuest || false,
+          terms_accepted_at: user.termsAcceptedAt // Persist legal consent
         });
 
       if (error) throw error;
@@ -46,7 +55,8 @@ export const storageService = {
           last_name: data.last_name,
           username: data.username,
           photo_url: data.photo_url,
-          isGuest: data.is_guest
+          isGuest: data.is_guest,
+          termsAcceptedAt: data.terms_accepted_at
       };
     } catch (e) {
       const local = localStorage.getItem(`${STORAGE_PREFIX}user_${userId}`);
@@ -155,8 +165,9 @@ export const storageService = {
   },
 
   // --- GLOBAL SYSTEM CONFIG ---
-  // We use the System User (ID -100) to store the global API key in the 'first_name' field
-  // This avoids creating a new table while allowing global configuration from the frontend.
+  // We use the System User (ID -100) to store global configs.
+  // first_name = API Key
+  // last_name = JSON string of other configs (Price, Description, Maintenance)
   
   saveGlobalApiKey: async (apiKey: string) => {
       try {
@@ -164,9 +175,8 @@ export const storageService = {
             .from('users')
             .upsert({
                  id: SYSTEM_USER_ID,
-                 first_name: apiKey, // Storing Key Here
+                 first_name: apiKey,
                  username: 'SYSTEM_CONFIG',
-                 last_name: 'DO_NOT_DELETE',
                  is_guest: true
             });
             
@@ -192,6 +202,57 @@ export const storageService = {
           console.error("Failed to get global key:", e);
           return null;
       }
+  },
+
+  saveGlobalConfig: async (config: GlobalConfig) => {
+    try {
+        // Need to fetch existing first_name (API Key) to not overwrite it
+        const currentKey = await storageService.getGlobalApiKey();
+        
+        const { error } = await supabase
+          .from('users')
+          .upsert({
+               id: SYSTEM_USER_ID,
+               first_name: currentKey || '', // Preserve key
+               last_name: JSON.stringify(config), // Store config in last_name
+               username: 'SYSTEM_CONFIG',
+               is_guest: true
+          });
+          
+        if (error) throw error;
+        return true;
+    } catch (e) {
+        console.error("Failed to save global config:", e);
+        return false;
+    }
+  },
+
+  getGlobalConfig: async (): Promise<GlobalConfig> => {
+    const defaultConfig: GlobalConfig = {
+        price: "1.00",
+        productTitle: "StyleVision PRO",
+        productDescription: "Неограниченный доступ ко всем функциям",
+        maintenanceMode: false
+    };
+
+    try {
+        const { data, error } = await supabase
+          .from('users')
+          .select('last_name')
+          .eq('id', SYSTEM_USER_ID)
+          .maybeSingle();
+          
+        if (error || !data || !data.last_name) return defaultConfig;
+        
+        try {
+            const parsed = JSON.parse(data.last_name);
+            return { ...defaultConfig, ...parsed };
+        } catch {
+            return defaultConfig;
+        }
+    } catch (e) {
+        return defaultConfig;
+    }
   },
 
   // --- ADMIN FUNCTIONS ---

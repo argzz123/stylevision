@@ -1,3 +1,4 @@
+
 // Yookassa Integration Service
 
 export interface PaymentResponse {
@@ -17,7 +18,7 @@ export interface PaymentResponse {
 /**
  * Creates a payment via Vercel Serverless Function
  */
-export const createPayment = async (): Promise<PaymentResponse> => {
+export const createPayment = async (amount: string, description: string): Promise<PaymentResponse> => {
   
   const SERVER_URL = '/api/create-payment';
 
@@ -26,9 +27,9 @@ export const createPayment = async (): Promise<PaymentResponse> => {
   const returnUrl = window.location.href;
 
   const paymentData = {
-    amount: "1.00",
+    amount: amount,
     returnUrl: returnUrl,
-    description: "Подписка StyleVision PRO (Тест)"
+    description: description
   };
 
   try {

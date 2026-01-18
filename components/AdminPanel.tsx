@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect } from 'react';
-import { storageService } from '../services/storageService';
+import { storageService, GlobalConfig } from '../services/storageService';
 import { getOrFetchApiKey, getApiKeySync } from '../services/geminiService';
 
 interface AdminPanelProps {
@@ -16,11 +17,25 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, currentUserId }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [manualKey, setManualKey] = useState('');
 
+  // Config State
+  const [config, setConfig] = useState<GlobalConfig>({ 
+      price: "1.00", 
+      productTitle: "", 
+      productDescription: "", 
+      maintenanceMode: false 
+  });
+
   useEffect(() => {
     loadUsers();
+    loadConfig();
     const existingOverride = localStorage.getItem('stylevision_api_key_override');
     if (existingOverride) setManualKey(existingOverride);
   }, []);
+
+  const loadConfig = async () => {
+      const c = await storageService.getGlobalConfig();
+      setConfig(c);
+  };
 
   const loadUsers = async () => {
     setIsLoading(true);
@@ -50,20 +65,21 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, currentUserId }) => {
           alert("Ключ слишком короткий");
           return;
       }
-      
       // 1. Save Locally for Admin
       localStorage.setItem('stylevision_api_key_override', manualKey.trim());
-      
       // 2. Save Globally to Supabase
       const savedToDb = await storageService.saveGlobalApiKey(manualKey.trim());
-      
       if (savedToDb) {
-          alert("Ключ сохранен в Базе Данных! Теперь приложение работает у ВСЕХ пользователей.");
+          alert("Ключ сохранен в Базе Данных!");
       } else {
-          alert("Ключ сохранен локально, но ошибка записи в БД. Работает только у вас.");
+          alert("Ошибка сохранения в БД.");
       }
-      
       testApiConnection();
+  };
+
+  const handleSaveConfig = async () => {
+      await storageService.saveGlobalConfig(config);
+      alert("Настройки магазина и системы сохранены!");
   };
 
   const handleClearKey = () => {
@@ -203,6 +219,62 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, currentUserId }) => {
                 <div className="animate-fade-in space-y-6">
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         
+                        {/* Global Config Manager */}
+                        <div className="bg-neutral-900 border border-neutral-800 p-6 rounded-lg md:col-span-2">
+                             <h3 className="text-lg font-bold text-white mb-4">Настройки Магазина и Приложения</h3>
+                             
+                             {/* Maintenance Toggle */}
+                             <div className="mb-6 p-4 border border-yellow-900/30 bg-yellow-900/10 rounded-lg flex items-center justify-between">
+                                <div>
+                                    <h4 className="text-yellow-500 font-bold mb-1">Режим Технических Работ</h4>
+                                    <p className="text-xs text-neutral-400">Если включено, пользователи увидят экран "Мы обновляемся". Администраторы продолжат видеть приложение.</p>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                  <input 
+                                    type="checkbox" 
+                                    checked={config.maintenanceMode} 
+                                    onChange={(e) => setConfig({...config, maintenanceMode: e.target.checked})}
+                                    className="sr-only peer" 
+                                  />
+                                  <div className="w-11 h-6 bg-neutral-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-600"></div>
+                                </label>
+                             </div>
+
+                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-xs text-neutral-500 mb-1 block">Стоимость (RUB)</label>
+                                    <input 
+                                        type="text" 
+                                        value={config.price}
+                                        onChange={(e) => setConfig({...config, price: e.target.value})}
+                                        className="w-full bg-black border border-neutral-700 rounded p-2 text-white"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs text-neutral-500 mb-1 block">Заголовок продукта</label>
+                                    <input 
+                                        type="text" 
+                                        value={config.productTitle}
+                                        onChange={(e) => setConfig({...config, productTitle: e.target.value})}
+                                        className="w-full bg-black border border-neutral-700 rounded p-2 text-white"
+                                    />
+                                </div>
+                                <div className="md:col-span-2">
+                                    <label className="text-xs text-neutral-500 mb-1 block">Описание преимуществ (Что получает клиент)</label>
+                                    <textarea 
+                                        value={config.productDescription}
+                                        onChange={(e) => setConfig({...config, productDescription: e.target.value})}
+                                        className="w-full bg-black border border-neutral-700 rounded p-2 text-white h-20"
+                                    />
+                                </div>
+                                <div className="md:col-span-2">
+                                    <button onClick={handleSaveConfig} className="bg-green-600 text-white font-bold px-4 py-2 rounded hover:bg-green-500">
+                                        Сохранить настройки
+                                    </button>
+                                </div>
+                             </div>
+                        </div>
+
                         {/* API Status Card */}
                         <div className="bg-neutral-900 border border-neutral-800 p-6 rounded-lg">
                             <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
@@ -217,8 +289,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, currentUserId }) => {
                                 </span>
                             </div>
 
-                            {apiLatency > 0 && <p className="text-xs text-neutral-500 mb-4">Latency: {apiLatency}ms</p>}
-
                             <button onClick={testApiConnection} className="w-full bg-neutral-800 hover:bg-neutral-700 text-white py-2 rounded transition-colors text-sm">
                                 Проверить соединение
                             </button>
@@ -228,7 +298,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, currentUserId }) => {
                         <div className="bg-neutral-900 border border-neutral-800 p-6 rounded-lg">
                              <h3 className="text-lg font-bold text-white mb-2">Глобальный API Ключ</h3>
                              <p className="text-xs text-neutral-500 mb-4">
-                                Этот ключ сохранится в базе данных и будет раздаваться всем пользователям автоматически, если Vercel сервер недоступен.
+                                Этот ключ сохранится в базе данных и будет раздаваться всем пользователям.
                              </p>
                              <div className="flex gap-2">
                                  <input 
@@ -239,28 +309,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, currentUserId }) => {
                                     className="flex-grow bg-black border border-neutral-700 rounded p-2 text-white text-sm font-mono focus:border-amber-500 outline-none"
                                  />
                                  <button onClick={handleSaveKey} className="bg-amber-600 text-black font-bold px-3 py-2 rounded text-sm hover:bg-amber-500">
-                                     Сохранить для ВСЕХ
+                                     Сохранить
                                  </button>
                                  {isOverride && (
                                      <button onClick={handleClearKey} className="bg-red-900/30 text-red-500 border border-red-900 font-bold px-3 py-2 rounded text-sm hover:bg-red-900/50">
                                          X
                                      </button>
                                  )}
-                             </div>
-                        </div>
-
-                        {/* Debug Info */}
-                         <div className="bg-neutral-900 border border-neutral-800 p-6 rounded-lg md:col-span-2">
-                             <h3 className="text-lg font-bold text-white mb-4">Отладка доступа</h3>
-                             <div className="grid grid-cols-2 gap-4 text-xs font-mono">
-                                 <div className="p-3 bg-black rounded">
-                                     <span className="text-neutral-500 block">Local Storage</span>
-                                     <span className={localKey ? "text-green-500" : "text-neutral-500"}>{localKey ? 'PRESENT' : 'EMPTY'}</span>
-                                 </div>
-                                 <div className="p-3 bg-black rounded">
-                                     <span className="text-neutral-500 block">Supabase (Database) Fallback</span>
-                                     <span className="text-blue-500">Enabled (System User -100)</span>
-                                 </div>
                              </div>
                         </div>
                      </div>

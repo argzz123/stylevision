@@ -83,5 +83,6 @@ export interface TelegramUser {
   username?: string;
   language_code?: string;
   photo_url?: string;
-  isGuest?: boolean; // New flag
+  isGuest?: boolean;
+  termsAcceptedAt?: string; // ISO Date string of when terms were accepted
 }

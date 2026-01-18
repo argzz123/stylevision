@@ -1,15 +1,17 @@
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { analyzeUserImage, getStyleRecommendations, editUserImage, IS_DEMO_MODE } from './services/geminiService';
 import { createPayment, PaymentResponse, checkPaymentStatus } from './services/paymentService';
-import { storageService } from './services/storageService'; 
+import { storageService, GlobalConfig } from './services/storageService'; 
 import { AppState, UserAnalysis, StyleRecommendation, AnalysisMode, Store, Season, Occasion, HistoryItem, MobileTab, TelegramUser } from './types';
 import StyleCard from './components/StyleCard';
 import BeforeAfterSlider from './components/BeforeAfterSlider';
 import LoginScreen from './components/LoginScreen';
 import AdminPanel from './components/AdminPanel'; 
 
-// ADMIN ID CONSTANT
-const ADMIN_ID = 643780299;
+// ADMIN ID CONSTANT (Array)
+const ADMIN_IDS = [643780299, 1613288376];
+
 const FREE_LIMIT = 2; // Max generations per 5 hours
 
 // Configuration for available stores
@@ -35,11 +37,20 @@ const App: React.FC = () => {
   const [setupStep, setSetupStep] = useState<number>(1);
   const [isPro, setIsPro] = useState(false);
   
+  // Config State
+  const [globalConfig, setGlobalConfig] = useState<GlobalConfig>({ 
+      price: "1.00", 
+      productTitle: "StyleVision PRO", 
+      productDescription: "",
+      maintenanceMode: false
+  });
+  
   // Overlays
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showAuthRequest, setShowAuthRequest] = useState(false);
   const [showAdminPanel, setShowAdminPanel] = useState(false); 
   const [showLimitModal, setShowLimitModal] = useState(false);
+  const [showGuestLockModal, setShowGuestLockModal] = useState(false);
   
   // Data State
   const [originalImage, setOriginalImage] = useState<string | null>(null);
@@ -69,9 +80,16 @@ const App: React.FC = () => {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Helper: Is Admin?
+  const isAdmin = (id: number) => ADMIN_IDS.includes(id);
+
   // Initialize and Check Session
   useEffect(() => {
     const initApp = async () => {
+        // Load global pricing config
+        const config = await storageService.getGlobalConfig();
+        setGlobalConfig(config);
+
         // 1. Check if running inside Telegram WebApp
         const tg = (window as any).Telegram?.WebApp;
         if (tg) {
@@ -79,12 +97,10 @@ const App: React.FC = () => {
             tg.expand();
             const tgUser = tg.initDataUnsafe?.user;
             if (tgUser) {
-                // We use the function below, but since it's defined later we can't use it directly in effect if not careful
-                // So we just inline the logic or move function up. 
-                // However, since handleLogin is now memoized, we can add it to dep array or just call the logic.
-                setUser({ ...tgUser, isGuest: false });
-                localStorage.setItem('stylevision_current_user', JSON.stringify({ ...tgUser, isGuest: false }));
-                await storageService.saveUser({ ...tgUser, isGuest: false });
+                const fullUser = { ...tgUser, isGuest: false };
+                setUser(fullUser);
+                localStorage.setItem('stylevision_current_user', JSON.stringify(fullUser));
+                await storageService.saveUser(fullUser);
                 await loadUserData(tgUser.id);
                 setIsAuthChecking(false);
                 return;
@@ -263,7 +279,10 @@ const App: React.FC = () => {
     try {
         setIsProcessing(true);
         setProcessingMessage('Соединение с ЮKassa...');
-        const payment = await createPayment();
+        
+        // Use global config for price and description
+        const payment = await createPayment(globalConfig.price, globalConfig.productDescription || "Подписка StyleVision PRO");
+        
         if (payment.confirmation && payment.confirmation.confirmation_url) {
             window.location.href = payment.confirmation.confirmation_url;
         } else {
@@ -277,6 +296,12 @@ const App: React.FC = () => {
   };
 
   const performAnalysis = async () => {
+     // GUEST BLOCK CHECK
+     if (user?.isGuest) {
+         setShowGuestLockModal(true);
+         return;
+     }
+
      try {
       setAppState(AppState.ANALYZING);
       setIsProcessing(true);
@@ -311,6 +336,12 @@ const App: React.FC = () => {
   const handleApplyStyle = async (style: StyleRecommendation) => {
     if (!originalImage || !analysis) return;
     
+    // GUEST BLOCK CHECK
+    if (user?.isGuest) {
+        setShowGuestLockModal(true);
+        return;
+    }
+
     // Check Limit
     const canProceed = await checkLimit();
     if (!canProceed) return;
@@ -356,6 +387,12 @@ const App: React.FC = () => {
      e.preventDefault();
      if (!currentImage || !editPrompt.trim()) return;
 
+     // GUEST BLOCK CHECK
+     if (user?.isGuest) {
+         setShowGuestLockModal(true);
+         return;
+     }
+
      // Check Limit
      const canProceed = await checkLimit();
      if (!canProceed) return;
@@ -394,6 +431,11 @@ const App: React.FC = () => {
      setHistory([]);
   };
 
+  const handleGuestToLogin = () => {
+      setShowGuestLockModal(false);
+      handleLogout(); // This will clear guest session and show LoginScreen
+  };
+
   // 1. Loading
   if (isAuthChecking) {
     return (
@@ -408,7 +450,32 @@ const App: React.FC = () => {
     return <LoginScreen onLogin={handleLogin} />;
   }
 
-  // 3. Main UI
+  // 3. Maintenance Mode (Block non-admins)
+  if (globalConfig.maintenanceMode && !isAdmin(user.id)) {
+      return (
+          <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center p-6 text-center animate-fade-in">
+              <div className="w-24 h-24 bg-yellow-900/20 border border-yellow-600/50 rounded-full flex items-center justify-center mb-8">
+                  <svg className="w-12 h-12 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                  </svg>
+              </div>
+              <h1 className="text-3xl font-serif text-white mb-4">Мы обновляемся</h1>
+              <p className="text-neutral-400 max-w-md mb-8 leading-relaxed">
+                  В данный момент проводятся технические работы для улучшения сервиса. Мы скоро вернемся! Приносим извинения за неудобства.
+              </p>
+              
+              <div className="border-t border-neutral-800 pt-6 w-full max-w-xs">
+                  <p className="text-xs text-neutral-500 uppercase tracking-widest mb-3">Связаться с нами</p>
+                  <a href="https://t.me/Nikita_Peredvigin" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 bg-[#2AABEE] hover:bg-[#229ED9] text-white py-3 rounded-lg font-bold transition-colors">
+                     <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+                     @Nikita_Peredvigin
+                  </a>
+              </div>
+          </div>
+      );
+  }
+
+  // 4. Main UI
   return (
     <div className="min-h-screen bg-[#050505] text-neutral-300 font-sans flex flex-col pb-20 md:pb-0">
       
@@ -445,7 +512,7 @@ const App: React.FC = () => {
              )}
 
              {/* ADMIN BUTTON (Only visible to admin) */}
-             {user.id === ADMIN_ID && (
+             {isAdmin(user.id) && (
                 <button 
                   onClick={() => setShowAdminPanel(true)}
                   className="bg-red-900/20 border border-red-900 text-red-500 text-xs font-bold px-3 py-1 rounded hover:bg-red-900/40 transition-colors hidden sm:block"
@@ -468,7 +535,6 @@ const App: React.FC = () => {
                   onClick={handleBuyProClick}
                   className="bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-black text-xs font-bold px-4 py-2 rounded-full transition-all shadow-lg shadow-amber-900/20 flex items-center gap-1.5"
                 >
-                    {/* Crown emoji removed here */}
                     <span className="hidden sm:inline">Купить PRO</span>
                     <span className="sm:hidden">PRO</span>
                 </button>
@@ -483,8 +549,36 @@ const App: React.FC = () => {
       </header>
 
       {/* ADMIN PANEL OVERLAY */}
-      {showAdminPanel && user.id === ADMIN_ID && (
+      {showAdminPanel && isAdmin(user.id) && (
          <AdminPanel onClose={() => setShowAdminPanel(false)} currentUserId={user.id} />
+      )}
+
+      {/* GUEST LOCK MODAL */}
+      {showGuestLockModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in">
+             <div className="relative w-full max-w-md bg-[#0a0a0a] border border-amber-900/50 rounded-2xl p-8 shadow-2xl overflow-hidden">
+                <button onClick={() => setShowGuestLockModal(false)} className="absolute top-4 right-4 text-neutral-500 hover:text-white">
+                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+
+                <div className="text-center">
+                    <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center">
+                        <span className="text-3xl">🔒</span>
+                    </div>
+                    <h2 className="text-2xl font-serif text-white mb-3">Только для авторизованных</h2>
+                    <p className="text-neutral-400 text-sm mb-6 leading-relaxed">
+                        Гостевой режим позволяет только загрузить фото. Чтобы создать персональный стиль, примерить образы и использовать редактор, пожалуйста, войдите через Telegram.
+                    </p>
+
+                    <button 
+                        onClick={handleGuestToLogin}
+                        className="w-full bg-white text-black font-bold py-3.5 rounded-xl hover:bg-neutral-200 transition-colors uppercase tracking-wider text-xs"
+                    >
+                        Войти через Telegram
+                    </button>
+                </div>
+            </div>
+         </div>
       )}
 
       {/* LIMIT MODAL */}
@@ -510,7 +604,7 @@ const App: React.FC = () => {
                             onClick={handleBuyProClick}
                             className="w-full bg-gradient-to-r from-amber-600 to-amber-500 text-black font-bold py-3.5 rounded-xl hover:brightness-110 transition-all shadow-lg"
                         >
-                            Снять лимиты за 1₽
+                            Снять лимиты за {globalConfig.price}₽
                         </button>
                         <button 
                             onClick={() => setShowLimitModal(false)}
@@ -578,13 +672,25 @@ const App: React.FC = () => {
                             <span className="font-serif text-3xl text-amber-500 italic">S</span>
                         </div>
                     </div>
-                    <h2 className="text-3xl font-serif text-white mb-2">StyleVision <span className="text-amber-500">PRO</span></h2>
+                    <h2 className="text-2xl font-serif text-white mb-2">{globalConfig.productTitle || "StyleVision PRO"}</h2>
+                    
+                    {/* Updated Product Description Area */}
                     <div className="bg-neutral-900/50 rounded-xl p-4 border border-neutral-800 mb-6">
-                        <div className="flex justify-between items-center mb-1">
+                        <div className="flex justify-between items-center mb-3 pb-3 border-b border-neutral-800">
                             <span className="text-neutral-400 text-sm">Стоимость</span>
-                            <span className="text-xl font-bold text-white">1 ₽</span>
+                            <span className="text-xl font-bold text-white">{globalConfig.price} ₽</span>
                         </div>
-                        <p className="text-[10px] text-neutral-600 text-left">Тестовый платеж</p>
+                        <div className="text-left text-xs text-neutral-300 space-y-2">
+                           {globalConfig.productDescription ? (
+                               <p className="whitespace-pre-line leading-relaxed">{globalConfig.productDescription}</p>
+                           ) : (
+                               <>
+                                <p>• Безлимитная генерация образов</p>
+                                <p>• Приоритетная обработка (без очереди)</p>
+                                <p>• Доступ к функции примерки (Virtual Try-On)</p>
+                               </>
+                           )}
+                        </div>
                     </div>
 
                     <button 
@@ -598,6 +704,10 @@ const App: React.FC = () => {
                             <><span>Оплатить через</span><span className="font-bold">ЮKassa</span></>
                         )}
                     </button>
+                    
+                    <p className="mt-4 text-[10px] text-neutral-600">
+                       Нажимая кнопку, вы соглашаетесь с условиями оферты.
+                    </p>
                 </div>
             </div>
         </div>
