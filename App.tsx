@@ -511,11 +511,11 @@ const App: React.FC = () => {
                  </button>
              )}
 
-             {/* ADMIN BUTTON (Only visible to admin) */}
+             {/* ADMIN BUTTON - NOW VISIBLE ON MOBILE */}
              {isAdmin(user.id) && (
                 <button 
                   onClick={() => setShowAdminPanel(true)}
-                  className="bg-red-900/20 border border-red-900 text-red-500 text-xs font-bold px-3 py-1 rounded hover:bg-red-900/40 transition-colors hidden sm:block"
+                  className="bg-red-900/20 border border-red-900 text-red-500 text-xs font-bold px-3 py-1 rounded hover:bg-red-900/40 transition-colors"
                 >
                   ADMIN
                 </button>
@@ -876,7 +876,7 @@ const App: React.FC = () => {
 
         {/* RESULTS: Split View for Desktop, Tabs for Mobile */}
         {appState === AppState.RESULTS && analysis && (
-          <div className="h-full animate-fade-in-up">
+          <div className="animate-fade-in-up">
             {/* Mobile Tab Content */}
             <div className="md:grid md:grid-cols-12 md:gap-8">
                
@@ -943,7 +943,7 @@ const App: React.FC = () => {
                </div>
 
                {/* Right/Second Column: Collection */}
-               <div className={`md:col-span-7 pb-20 md:pb-0 ${activeMobileTab === 'COLLECTION' ? 'block' : 'hidden md:block'}`}>
+               <div className={`md:col-span-7 pb-24 md:pb-0 ${activeMobileTab === 'COLLECTION' ? 'block' : 'hidden md:block'}`}>
                   <div className="mb-6 flex justify-between items-end">
                      <div>
                         <span className="text-amber-500 text-xs font-bold uppercase tracking-widest">Коллекция</span>

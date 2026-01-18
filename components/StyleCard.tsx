@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { StyleRecommendation, Store } from '../types';
 
@@ -50,9 +51,9 @@ const StyleCard: React.FC<StyleCardProps> = ({
     <div 
       onClick={!isProcessingGlobal ? onClick : undefined}
       className={`
-        rounded-xl border p-4 md:p-6 transition-all duration-300 relative overflow-hidden group flex flex-col h-full shadow-sm
+        rounded-xl border p-4 md:p-6 transition-all duration-300 relative overflow-hidden group flex flex-col shadow-sm
         ${isSelected 
-          ? 'bg-black border-amber-500/80 shadow-[0_0_20px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/50 z-10 scale-[1.01]' 
+          ? 'bg-[#0a0a0a] border-amber-500/80 shadow-[0_0_20px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/50 z-10 scale-[1.01]' 
           : 'bg-[#0f0f0f]/80 border-neutral-800 hover:border-neutral-700 hover:bg-[#151515] opacity-80 hover:opacity-100 scale-100'}
         ${isProcessingGlobal && !isSelected ? 'opacity-50 cursor-not-allowed grayscale' : 'cursor-pointer'}
       `}
