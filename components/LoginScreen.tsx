@@ -10,11 +10,41 @@ interface LoginScreenProps {
 const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isOverlay = false, onCancel }) => {
   const [mockName, setMockName] = useState('');
   const [currentDomain, setCurrentDomain] = useState('');
+  const [showWwwWarning, setShowWwwWarning] = useState(false);
   const telegramWrapperRef = useRef<HTMLDivElement>(null);
 
+  const loadWidget = () => {
+     if (!telegramWrapperRef.current) return;
+     
+     // Clean previous
+     telegramWrapperRef.current.innerHTML = '';
+
+     // Create script
+     const script = document.createElement('script');
+     script.src = "https://telegram.org/js/telegram-widget.js?22";
+     script.setAttribute('data-telegram-login', 'stylevision_bot'); 
+     script.setAttribute('data-size', 'large');
+     
+     // CRITICAL FIXES FOR STABILITY:
+     // 1. request-access="write": Forces a stronger permission handshake which often fixes "code not sent" issues.
+     script.setAttribute('data-request-access', 'write'); 
+     // 2. userpic="false": Prevents widget crash if user has strict privacy settings for profile photos.
+     script.setAttribute('data-userpic', 'false'); 
+     
+     script.setAttribute('data-onauth', 'onTelegramAuth(user)');
+     script.async = true;
+
+     telegramWrapperRef.current.appendChild(script);
+  };
+
   useEffect(() => {
-    // Show user the exact domain to put in BotFather
-    setCurrentDomain(window.location.hostname);
+    const hostname = window.location.hostname;
+    setCurrentDomain(hostname);
+
+    // Check for common 'www' mismatch issue
+    if (hostname.startsWith('www.')) {
+        setShowWwwWarning(true);
+    }
 
     // 1. Define global callback
     (window as any).onTelegramAuth = (user: any) => {
@@ -29,23 +59,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isOverlay = false, o
       });
     };
 
-    // 2. Prepare script
-    const script = document.createElement('script');
-    script.src = "https://telegram.org/js/telegram-widget.js?22";
-    script.setAttribute('data-telegram-login', 'stylevision_bot'); 
-    script.setAttribute('data-size', 'large');
-    script.setAttribute('data-radius', '12');
-    // Removed data-request-access to ensure basic auth works first (highest reliability)
-    script.setAttribute('data-onauth', 'onTelegramAuth(user)');
-    script.async = true;
-
-    // 3. Inject
-    if (telegramWrapperRef.current) {
-        telegramWrapperRef.current.innerHTML = ''; 
-        telegramWrapperRef.current.appendChild(script);
-    }
+    // 2. Load Widget
+    loadWidget();
 
     return () => {
+        // Cleanup
         delete (window as any).onTelegramAuth;
         if (telegramWrapperRef.current) {
             telegramWrapperRef.current.innerHTML = '';
@@ -106,16 +124,33 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isOverlay = false, o
             </h2>
             
             <div className="space-y-6 mt-6">
-               <div className="flex flex-col items-center justify-center min-h-[50px] bg-white/5 rounded-lg p-4">
-                  <div ref={telegramWrapperRef} className="flex justify-center w-full min-h-[40px]"></div>
+               <div className="flex flex-col items-center justify-center min-h-[50px] bg-white/5 rounded-lg p-4 relative">
+                  <div ref={telegramWrapperRef} className="flex justify-center w-full min-h-[40px] z-10 relative"></div>
+                  
+                  {/* Retry Button placed nicely if widget fails visually */}
+                  <div className="absolute -bottom-6 left-0 right-0 text-center">
+                      <button onClick={loadWidget} className="text-[10px] text-neutral-600 hover:text-amber-500 transition-colors">
+                          Не загрузилось? Нажмите здесь
+                      </button>
+                  </div>
                </div>
+               
+               {/* DOMAIN WARNINGS */}
+               {showWwwWarning && (
+                   <div className="bg-red-900/20 border border-red-900/50 p-3 rounded text-xs text-red-200">
+                       <p className="font-bold">⚠️ Проблема с "www"</p>
+                       <p>Вы зашли через <code>www.{currentDomain.replace('www.', '')}</code>, но в BotFather скорее всего указан домен без www.</p>
+                       <p className="mt-1">Попробуйте убрать "www." из адресной строки браузера.</p>
+                   </div>
+               )}
 
                {/* DIAGNOSTIC INFO */}
-               <div className="bg-amber-900/10 border border-amber-900/30 p-3 rounded text-[10px] text-neutral-400">
+               <div className="bg-amber-900/10 border border-amber-900/30 p-3 rounded text-[10px] text-neutral-400 mt-4">
                   <p className="text-amber-500 font-bold mb-1">ДИАГНОСТИКА:</p>
-                  <p>Ваш текущий домен: <span className="text-white font-mono bg-black px-1 rounded select-all">{currentDomain}</span></p>
-                  <p className="mt-2 leading-relaxed opacity-80">
-                     Если код не приходит, убедитесь, что в <strong>BotFather</strong> в настройках <strong>Domain</strong> указан ТОЧНО этот адрес (без https:// и слэшей).
+                  <p className="mb-1">Ваш текущий адрес: <span className="text-white font-mono bg-black px-1 rounded select-all">{currentDomain}</span></p>
+                  <p className="leading-relaxed opacity-80">
+                     В настройках бота (BotFather /domain) должен быть <strong>ровно этот адрес</strong>.
+                     Если видите "Server Error" — попробуйте отключить блокировщики рекламы или открыть в режиме Инкогнито.
                   </p>
                </div>
 
