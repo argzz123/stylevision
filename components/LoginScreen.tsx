@@ -9,10 +9,13 @@ interface LoginScreenProps {
 
 const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isOverlay = false, onCancel }) => {
   const [mockName, setMockName] = useState('');
+  const [currentDomain, setCurrentDomain] = useState('');
   const telegramWrapperRef = useRef<HTMLDivElement>(null);
 
-  // 1. SETUP TELEGRAM WIDGET
   useEffect(() => {
+    // Show user the exact domain to put in BotFather
+    setCurrentDomain(window.location.hostname);
+
     // 1. Define global callback
     (window as any).onTelegramAuth = (user: any) => {
       console.log("Telegram Auth Success:", user);
@@ -32,19 +35,17 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isOverlay = false, o
     script.setAttribute('data-telegram-login', 'stylevision_bot'); 
     script.setAttribute('data-size', 'large');
     script.setAttribute('data-radius', '12');
-    // Restoration: 'write' access often helps with code delivery and bot permissions
-    script.setAttribute('data-request-access', 'write'); 
+    // Removed data-request-access to ensure basic auth works first (highest reliability)
     script.setAttribute('data-onauth', 'onTelegramAuth(user)');
     script.async = true;
 
     // 3. Inject
     if (telegramWrapperRef.current) {
-        telegramWrapperRef.current.innerHTML = ''; // Clean previous
+        telegramWrapperRef.current.innerHTML = ''; 
         telegramWrapperRef.current.appendChild(script);
     }
 
     return () => {
-        // Cleanup to prevent memory leaks or conflicts
         delete (window as any).onTelegramAuth;
         if (telegramWrapperRef.current) {
             telegramWrapperRef.current.innerHTML = '';
@@ -106,16 +107,16 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isOverlay = false, o
             
             <div className="space-y-6 mt-6">
                <div className="flex flex-col items-center justify-center min-h-[50px] bg-white/5 rounded-lg p-4">
-                  <div ref={telegramWrapperRef} className="flex justify-center w-full"></div>
+                  <div ref={telegramWrapperRef} className="flex justify-center w-full min-h-[40px]"></div>
                </div>
 
-               <div className="text-[10px] text-neutral-500 text-center leading-relaxed bg-neutral-900/50 p-3 rounded border border-neutral-800">
-                  <p className="mb-2">⚠️ <strong>Код не приходит?</strong></p>
-                  <ol className="list-decimal list-inside space-y-1 text-neutral-400 text-left px-2">
-                      <li>Проверьте приложение Telegram (чат "Telegram").</li>
-                      <li>Если не помогло: найдите бота <strong>@stylevision_bot</strong> и нажмите <span className="text-amber-500 font-mono">/start</span> или "Перезапустить".</li>
-                      <li>Обновите эту страницу.</li>
-                  </ol>
+               {/* DIAGNOSTIC INFO */}
+               <div className="bg-amber-900/10 border border-amber-900/30 p-3 rounded text-[10px] text-neutral-400">
+                  <p className="text-amber-500 font-bold mb-1">ДИАГНОСТИКА:</p>
+                  <p>Ваш текущий домен: <span className="text-white font-mono bg-black px-1 rounded select-all">{currentDomain}</span></p>
+                  <p className="mt-2 leading-relaxed opacity-80">
+                     Если код не приходит, убедитесь, что в <strong>BotFather</strong> в настройках <strong>Domain</strong> указан ТОЧНО этот адрес (без https:// и слэшей).
+                  </p>
                </div>
 
                {!isOverlay && (
