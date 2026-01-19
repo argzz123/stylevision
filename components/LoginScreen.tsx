@@ -18,7 +18,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isOverlay = false, o
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const [showAgreementError, setShowAgreementError] = useState(false);
   
-  // Modal states
+  // Modal states - Kept for fallback or if needed, but not used in primary flow now
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
 
@@ -141,37 +141,21 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isOverlay = false, o
         </div>
       )}
       
-      {/* TERMS MODAL */}
+      {/* TERMS MODAL (Hidden, kept as fallback logic structure only if needed later) */}
       {showTermsModal && (
           <div className="fixed inset-0 z-[150] bg-black/95 flex items-center justify-center p-4">
               <div className="bg-[#111] border border-neutral-800 rounded-xl p-6 max-w-lg w-full max-h-[80vh] overflow-y-auto">
                   <h3 className="text-xl font-bold text-white mb-4">Пользовательское соглашение</h3>
-                  <div className="text-sm text-neutral-400 space-y-3 leading-relaxed">
-                      <p>1. Общие положения. Настоящее Соглашение определяет условия использования пользователями материалов и сервисов сайта/приложения StyleVision AI.</p>
-                      <p>2. Обязательства Пользователя. Пользователь соглашается не предпринимать действий, которые могут рассматриваться как нарушающие российское законодательство или нормы международного права, в том числе в сфере интеллектуальной собственности.</p>
-                      <p>3. Сервис предоставляется «как есть». Администрация не гарантирует, что качество сервисов будет соответствовать ожиданиям Пользователя.</p>
-                      <p>4. Оплата. Платежи обрабатываются через сторонние сервисы (ЮKassa). Мы не храним данные ваших карт.</p>
-                  </div>
                   <button onClick={() => setShowTermsModal(false)} className="mt-6 w-full bg-amber-600 text-black font-bold py-3 rounded">Закрыть</button>
               </div>
           </div>
       )}
 
-      {/* PRIVACY MODAL */}
+      {/* PRIVACY MODAL (Hidden) */}
       {showPrivacyModal && (
           <div className="fixed inset-0 z-[150] bg-black/95 flex items-center justify-center p-4">
               <div className="bg-[#111] border border-neutral-800 rounded-xl p-6 max-w-lg w-full max-h-[80vh] overflow-y-auto">
                   <h3 className="text-xl font-bold text-white mb-4">Политика конфиденциальности</h3>
-                  <div className="text-sm text-neutral-400 space-y-3 leading-relaxed">
-                      <p>1. Мы собираем минимально необходимый набор данных для функционирования сервиса: ID пользователя Telegram, имя пользователя, загруженные фотографии.</p>
-                      <p>2. Загруженные фотографии обрабатываются алгоритмами ИИ и сохраняются в зашифрованном виде в истории вашего профиля.</p>
-                      <p>3. Мы не передаем ваши личные данные третьим лицам, за исключением случаев, предусмотренных законодательством РФ.</p>
-                      <p>4. Вы можете в любой момент запросить удаление всех ваших данных, обратившись в поддержку:</p>
-                      <a href="https://t.me/Nikita_Peredvigin" target="_blank" rel="noopener noreferrer" className="text-amber-500 hover:text-amber-400 inline-flex items-center gap-1">
-                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
-                          @Nikita_Peredvigin
-                      </a>
-                  </div>
                   <button onClick={() => setShowPrivacyModal(false)} className="mt-6 w-full bg-amber-600 text-black font-bold py-3 rounded">Закрыть</button>
               </div>
           </div>
@@ -236,7 +220,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isOverlay = false, o
                   </a>
                </div>
 
-               {/* Legal Checkboxes (Moved Below Help) */}
+               {/* Legal Checkboxes (Updated with direct links) */}
                <div className={`space-y-3 p-4 rounded-lg border transition-all ${showAgreementError ? 'bg-red-900/10 border-red-500/50' : 'bg-neutral-900/50 border-neutral-800'}`}>
                    {showAgreementError && (
                        <div className="text-center mb-3">
@@ -250,14 +234,14 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isOverlay = false, o
                        "check_terms", 
                        termsAccepted, 
                        setTermsAccepted, 
-                       <>Я принимаю условия <span onClick={(e) => {e.preventDefault(); setShowTermsModal(true)}} className="text-amber-500 hover:text-amber-400 underline cursor-pointer">Пользовательского соглашения</span></>
+                       <>Я принимаю условия <a href="/offer.html" target="_blank" rel="noopener noreferrer" className="text-amber-500 hover:text-amber-400 underline cursor-pointer">Публичной оферты</a></>
                    )}
                    
                    {renderCheckbox(
                        "check_privacy", 
                        privacyAccepted, 
                        setPrivacyAccepted, 
-                       <>Я даю согласие на обработку персональных данных согласно <span onClick={(e) => {e.preventDefault(); setShowPrivacyModal(true)}} className="text-amber-500 hover:text-amber-400 underline cursor-pointer">Политике конфиденциальности</span></>
+                       <>Я даю согласие на обработку персональных данных согласно <a href="/privacy.html" target="_blank" rel="noopener noreferrer" className="text-amber-500 hover:text-amber-400 underline cursor-pointer">Политике конфиденциальности</a></>
                    )}
                </div>
 
