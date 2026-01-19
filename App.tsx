@@ -88,55 +88,30 @@ const App: React.FC = () => {
     const tg = (window as any).Telegram?.WebApp;
     const isTg = !!tg && !!tg.initData;
 
-    // 1. TELEGRAM MODE: Send via Bot (Priority)
-    if (isTg && user?.id) {
-        // Optimistic UI feedback
-        const btn = document.activeElement as HTMLElement;
-        if (btn) btn.style.opacity = '0.5';
-        
-        // Show Global Spinner
-        const prevMessage = processingMessage;
-        setIsProcessing(true);
-        setProcessingMessage('Отправляем фото в чат...');
-
+    // 1. TELEGRAM MODE: Copy to Clipboard
+    if (isTg) {
         try {
-            // Using absolute URL if needed, but on Amvera we expect frontend and backend on same domain
-            // If running locally with vite proxy, relative path is fine.
-            const response = await fetch('/api/send-photo', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    chatId: user.id,
-                    image: dataUrl,
-                    caption: 'Ваш новый образ от StyleVision AI ✨'
-                })
-            });
+            // Превращаем DataURL в Blob
+            const response = await fetch(dataUrl);
+            const blob = await response.blob();
 
-            // Read as text first to avoid "Unexpected end of JSON" error
-            const textResponse = await response.text();
+            // Создаем элемент буфера обмена
+            // Важно: navigator.clipboard работает только в безопасном контексте (HTTPS/Localhost)
+            // Telegram Mini Apps работают в WebView, который обычно поддерживает это.
+            const item = new ClipboardItem({ [blob.type]: blob });
             
-            let data;
-            try {
-                data = JSON.parse(textResponse);
-            } catch (e) {
-                // If text is not JSON (e.g., HTML error page 404/500), throw meaningful error
-                console.error("Non-JSON Response:", textResponse);
-                throw new Error(`Ошибка сервера (${response.status}): Некорректный ответ.`);
-            }
+            await navigator.clipboard.write([item]);
 
-            if (!response.ok) {
-                throw new Error(data.error || 'Ошибка отправки');
+            // Используем нативный алерт Телеграма
+            if (tg.showAlert) {
+                tg.showAlert('Фото скопировано в буфер обмена! Теперь вы можете вставить его в чат.');
+            } else {
+                alert('Фото скопировано! Вставьте его в сообщение.');
             }
-
-            alert('✅ Фото успешно отправлено вам в личные сообщения от имени бота!');
 
         } catch (e: any) {
-            console.error("Send failed:", e);
-            alert(`Не удалось отправить фото: ${e.message}`);
-        } finally {
-            setIsProcessing(false);
-            setProcessingMessage(prevMessage);
-            if (btn) btn.style.opacity = '1';
+            console.error("Clipboard failed:", e);
+            alert(`Не удалось скопировать (ограничение устройства). Пожалуйста, сделайте скриншот или откройте в браузере.`);
         }
         return;
     }
@@ -719,10 +694,10 @@ const App: React.FC = () => {
                                  downloadImage(item.resultImage || item.originalImage, `stylevision_${item.id}.png`);
                               }}
                               className="absolute bottom-2 right-2 w-8 h-8 flex items-center justify-center bg-black/60 hover:bg-amber-600 text-white rounded-full transition-colors backdrop-blur-sm shadow-lg z-10"
-                              title="Отправить в чат"
+                              title="Скопировать / Скачать"
                            >
                               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                               </svg>
                            </button>
 
@@ -988,7 +963,7 @@ const App: React.FC = () => {
                <div className={`md:col-span-5 ${activeMobileTab === 'STUDIO' ? 'block' : 'hidden md:block'}`}>
                   
                   {/* Image Container */}
-                  <div className="relative bg-black aspect-[3/4] border border-neutral-800 overflow-hidden group rounded-lg">
+                  <div className="relative bg-black aspect-[3/4] border border-neutral-800 overflow-hidden group rounded-lg mb-4">
                      {currentImage && (
                         <BeforeAfterSlider 
                            beforeImage={originalImage || ''} 
@@ -1004,8 +979,21 @@ const App: React.FC = () => {
                      )}
                   </div>
 
+                  {/* Add Save/Copy Button Here */}
+                  {currentImage && (
+                      <button 
+                        onClick={() => downloadImage(currentImage, `stylevision_look_${Date.now()}.png`)}
+                        className="w-full bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-white font-medium py-3 rounded-lg flex items-center justify-center gap-2 mb-4 transition-colors"
+                      >
+                         <svg className="w-5 h-5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                         </svg>
+                         Сохранить / Скопировать
+                      </button>
+                  )}
+
                   {/* Restored Simple Editor Controls */}
-                  <div className="bg-neutral-900 border border-neutral-800 border-t-0 p-5 rounded-b-lg mb-4">
+                  <div className="bg-neutral-900 border border-neutral-800 border-t-0 p-5 rounded-b-lg mb-4 rounded-t-lg">
                      <div className="flex items-center justify-between mb-3">
                         <span className="text-[10px] text-amber-600 font-bold uppercase tracking-widest">AI Редактор</span>
                         {currentImage !== originalImage && !isProcessing && (
