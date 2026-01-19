@@ -117,6 +117,25 @@ export const storageService = {
     }
   },
 
+  deleteHistoryItem: async (userId: number, itemId: string) => {
+    try {
+        const { error } = await supabase
+            .from('history')
+            .delete()
+            .eq('id', itemId)
+            .eq('user_id', userId);
+            
+        if (error) throw error;
+    } catch (e) {
+       console.error("Supabase History Delete Error:", e);
+       // Local Storage Fallback
+       const key = `${STORAGE_PREFIX}history_${userId}`;
+       const currentHistory = JSON.parse(localStorage.getItem(key) || '[]');
+       const newHistory = currentHistory.filter((i: any) => i.id !== itemId);
+       localStorage.setItem(key, JSON.stringify(newHistory));
+    }
+  },
+
   getHistory: async (userId: number): Promise<HistoryItem[]> => {
     try {
         const { data, error } = await supabase

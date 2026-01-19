@@ -83,14 +83,54 @@ const App: React.FC = () => {
   // Helper: Is Admin?
   const isAdmin = (id: number) => ADMIN_IDS.includes(id);
 
-  // Helper: Download Image
-  const downloadImage = (dataUrl: string, filename: string) => {
+  // Helper: Download/Share Image
+  const downloadImage = async (dataUrl: string, filename: string) => {
+    // Check if running in Telegram Mini App
+    const tg = (window as any).Telegram?.WebApp;
+    const isTg = !!tg && !!tg.initData;
+
+    // 1. If in Telegram, try Native Share first
+    if (isTg) {
+      try {
+        const res = await fetch(dataUrl);
+        const blob = await res.blob();
+        
+        if (navigator.share && navigator.canShare) {
+           const file = new File([blob], filename, { type: blob.type });
+           // Some browsers/webviews might require files array check
+           if (navigator.canShare({ files: [file] })) {
+             await navigator.share({
+                files: [file],
+                title: 'StyleVision Look',
+                text: 'Мой новый образ от StyleVision AI'
+             });
+             return; // Successfully shared via OS dialog
+           }
+        }
+      } catch (e) {
+        console.error("Native share failed, falling back to download", e);
+      }
+    }
+
+    // 2. Default Browser Download (Fallback)
     const link = document.createElement('a');
     link.href = dataUrl;
     link.download = filename;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const handleDeleteHistoryItem = async (e: React.MouseEvent, itemId: string) => {
+    e.stopPropagation();
+    if (!user) return;
+    if (!window.confirm("Вы уверены, что хотите удалить этот образ?")) return;
+
+    // Optimistic Update
+    setHistory(prev => prev.filter(item => item.id !== itemId));
+    
+    // Background Server Delete
+    await storageService.deleteHistoryItem(user.id, itemId);
   };
 
   // Initialize and Check Session
@@ -654,6 +694,17 @@ const App: React.FC = () => {
                            >
                               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                              </svg>
+                           </button>
+
+                           {/* Delete Button */}
+                           <button 
+                              onClick={(e) => handleDeleteHistoryItem(e, item.id)}
+                              className="absolute bottom-2 right-12 w-8 h-8 flex items-center justify-center bg-black/60 hover:bg-red-600 text-white rounded-full transition-colors backdrop-blur-sm shadow-lg z-10"
+                              title="Удалить"
+                           >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                               </svg>
                            </button>
                         </div>
