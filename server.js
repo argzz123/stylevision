@@ -2,7 +2,8 @@
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
-const FormData = require('form-data'); // Требуется для отправки файлов в Node.js
+const FormData = require('form-data');
+const path = require('path'); // Импорт path для работы с путями
 const app = express();
 
 // Настройки магазина
@@ -15,7 +16,9 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 app.use(cors());
 
-app.post('/create-payment', async (req, res) => {
+// --- API ROUTES ---
+
+app.post('/api/create-payment', async (req, res) => {
     try {
         const { amount, returnUrl, description } = req.body;
         const idempotenceKey = Math.random().toString(36).substring(7);
@@ -53,7 +56,6 @@ app.post('/create-payment', async (req, res) => {
 app.post('/api/send-photo', async (req, res) => {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   
-  // Для отладки, если токена нет - пишем в консоль
   if (!token) {
       console.error("ОШИБКА: TELEGRAM_BOT_TOKEN не найден в переменных окружения!");
       return res.status(500).json({ error: 'Bot token not configured on server' });
@@ -66,22 +68,24 @@ app.post('/api/send-photo', async (req, res) => {
           return res.status(400).json({ error: 'No image or chatId provided' });
       }
 
+      console.log(`Начинаем обработку фото для чата: ${chatId}`);
+
       // 1. Убираем префикс data:image...
       const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
       
       // 2. Создаем Буфер из строки (стандарт Node.js)
       const buffer = Buffer.from(base64Data, 'base64');
       
-      // 3. Используем библиотеку form-data для формирования multipart запроса
+      // 3. Используем библиотеку form-data
       const form = new FormData();
-      form.append('chat_id', chatId);
+      form.append('chat_id', String(chatId)); // Telegram API требует string/int
       form.append('photo', buffer, { filename: 'stylevision_look.png', contentType: 'image/png' });
       if (caption) {
           form.append('caption', caption);
       }
 
-      // 4. Отправляем через axios с заголовками формы
-      console.log(`Попытка отправки фото для ID: ${chatId}`);
+      // 4. Отправляем через axios
+      console.log(`Отправка в Telegram API...`);
       
       const telegramResponse = await axios.post(
           `https://api.telegram.org/bot${token}/sendPhoto`,
@@ -95,19 +99,30 @@ app.post('/api/send-photo', async (req, res) => {
           }
       );
 
-      console.log('Telegram Success:', telegramResponse.data.ok);
+      console.log('Telegram Ответ:', telegramResponse.data ? 'OK' : 'Empty');
       res.json({ success: true, result: telegramResponse.data });
 
   } catch (error) {
-      console.error('Send Photo Error:', error.response ? error.response.data : error.message);
+      const errorDetails = error.response ? error.response.data : error.message;
+      console.error('Send Photo Error:', errorDetails);
       res.status(500).json({ 
           error: 'Failed to send photo', 
-          details: error.response ? error.response.data : error.message 
+          details: errorDetails
       });
   }
 });
 
-const PORT = 3001;
+// --- СТАТИЧЕСКИЕ ФАЙЛЫ (React Frontend) ---
+// Это заставляет Node.js отдавать собранное React приложение
+app.use(express.static(path.join(__dirname, 'dist')));
+
+// Любой другой запрос, который не API, возвращает index.html (для React Router и SPA)
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
+
+// Используем process.env.PORT для Amvera/Heroku/etc, иначе 3001
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`Server running on port ${PORT}`);
 });

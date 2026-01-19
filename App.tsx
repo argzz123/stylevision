@@ -100,13 +100,9 @@ const App: React.FC = () => {
         setProcessingMessage('Отправляем фото в чат...');
 
         try {
-            // Using the full URL to your Amvera/Vercel backend
-            // Note: Ensure this matches your actual backend URL in production
-            const BACKEND_URL = window.location.hostname.includes('localhost') 
-                ? 'http://localhost:3001/api/send-photo'
-                : '/api/send-photo'; // Relative path works if frontend/backend are on same domain
-
-            const response = await fetch(BACKEND_URL, {
+            // Using absolute URL if needed, but on Amvera we expect frontend and backend on same domain
+            // If running locally with vite proxy, relative path is fine.
+            const response = await fetch('/api/send-photo', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -116,16 +112,27 @@ const App: React.FC = () => {
                 })
             });
 
+            // Read as text first to avoid "Unexpected end of JSON" error
+            const textResponse = await response.text();
+            
+            let data;
+            try {
+                data = JSON.parse(textResponse);
+            } catch (e) {
+                // If text is not JSON (e.g., HTML error page 404/500), throw meaningful error
+                console.error("Non-JSON Response:", textResponse);
+                throw new Error(`Ошибка сервера (${response.status}): Некорректный ответ.`);
+            }
+
             if (!response.ok) {
-                const errData = await response.json();
-                throw new Error(errData.error || 'Ошибка отправки');
+                throw new Error(data.error || 'Ошибка отправки');
             }
 
             alert('✅ Фото успешно отправлено вам в личные сообщения от имени бота!');
 
         } catch (e: any) {
             console.error("Send failed:", e);
-            alert(`Не удалось отправить фото: ${e.message}. Попробуйте позже.`);
+            alert(`Не удалось отправить фото: ${e.message}`);
         } finally {
             setIsProcessing(false);
             setProcessingMessage(prevMessage);
