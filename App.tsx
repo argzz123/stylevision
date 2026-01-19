@@ -83,6 +83,16 @@ const App: React.FC = () => {
   // Helper: Is Admin?
   const isAdmin = (id: number) => ADMIN_IDS.includes(id);
 
+  // Helper: Download Image
+  const downloadImage = (dataUrl: string, filename: string) => {
+    const link = document.createElement('a');
+    link.href = dataUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   // Initialize and Check Session
   useEffect(() => {
     const initApp = async () => {
@@ -629,9 +639,23 @@ const App: React.FC = () => {
                </div>
                <div className="space-y-6">
                   {history.map((item) => (
-                     <div key={item.id} onClick={() => loadFromHistory(item)} className="cursor-pointer group border border-neutral-800 hover:border-amber-600/50 bg-neutral-900 transition-all">
-                        <div className="aspect-[3/4] relative overflow-hidden">
+                     <div key={item.id} onClick={() => loadFromHistory(item)} className="cursor-pointer group border border-neutral-800 hover:border-amber-600/50 bg-neutral-900 transition-all relative">
+                        <div className="aspect-[3/4] relative overflow-hidden group/image">
                            <img src={item.resultImage || item.originalImage} className="w-full h-full object-cover" alt="History" />
+                           
+                           {/* Download Button */}
+                           <button 
+                              onClick={(e) => {
+                                 e.stopPropagation();
+                                 downloadImage(item.resultImage || item.originalImage, `stylevision_${item.id}.png`);
+                              }}
+                              className="absolute bottom-2 right-2 w-8 h-8 flex items-center justify-center bg-black/60 hover:bg-amber-600 text-white rounded-full transition-colors backdrop-blur-sm shadow-lg z-10"
+                              title="Скачать фото"
+                           >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                              </svg>
+                           </button>
                         </div>
                         <div className="p-4">
                            <h4 className="font-serif text-lg text-white mb-1">{item.styleTitle}</h4>
@@ -885,10 +909,11 @@ const App: React.FC = () => {
                   
                   {/* Image Container */}
                   <div className="relative bg-black aspect-[3/4] border border-neutral-800 overflow-hidden group rounded-lg">
-                     {currentImage && currentImage !== originalImage ? (
-                        <BeforeAfterSlider beforeImage={originalImage!} afterImage={currentImage} />
-                     ) : (
-                        currentImage && <img src={currentImage} className="w-full h-full object-cover" alt="Studio" />
+                     {currentImage && (
+                        <BeforeAfterSlider 
+                           beforeImage={originalImage || ''} 
+                           afterImage={currentImage} 
+                        />
                      )}
                      
                      {isProcessing && (
