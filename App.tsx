@@ -88,43 +88,53 @@ const App: React.FC = () => {
     const tg = (window as any).Telegram?.WebApp;
     const isTg = !!tg && !!tg.initData;
 
-    // 1. TELEGRAM MODE: Send via Bot
+    // 1. TELEGRAM MODE: Send via Bot (Priority)
     if (isTg && user?.id) {
-        try {
-            // Show global processing state or a toast would be better, but we use what we have
-            const prevMessage = processingMessage;
-            setIsProcessing(true);
-            setProcessingMessage('Отправляем фото в чат...');
+        // Optimistic UI feedback
+        const btn = document.activeElement as HTMLElement;
+        if (btn) btn.style.opacity = '0.5';
+        
+        // Show Global Spinner
+        const prevMessage = processingMessage;
+        setIsProcessing(true);
+        setProcessingMessage('Отправляем фото в чат...');
 
-            // Call our new backend endpoint
-            const response = await fetch('https://stylevision.vercel.app/api/send-photo', {
+        try {
+            // Using the full URL to your Amvera/Vercel backend
+            // Note: Ensure this matches your actual backend URL in production
+            const BACKEND_URL = window.location.hostname.includes('localhost') 
+                ? 'http://localhost:3001/api/send-photo'
+                : '/api/send-photo'; // Relative path works if frontend/backend are on same domain
+
+            const response = await fetch(BACKEND_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     chatId: user.id,
                     image: dataUrl,
-                    caption: 'Ваш образ от StyleVision AI ✨'
+                    caption: 'Ваш новый образ от StyleVision AI ✨'
                 })
             });
 
-            if (!response.ok) throw new Error('Failed to send');
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error || 'Ошибка отправки');
+            }
 
-            alert('Фото отправлено вам в личные сообщения!');
-            
-            // Restore state
+            alert('✅ Фото успешно отправлено вам в личные сообщения от имени бота!');
+
+        } catch (e: any) {
+            console.error("Send failed:", e);
+            alert(`Не удалось отправить фото: ${e.message}. Попробуйте позже.`);
+        } finally {
+            setIsProcessing(false);
             setProcessingMessage(prevMessage);
-            setIsProcessing(false);
-            return;
-
-        } catch (e) {
-            console.error(e);
-            alert('Не удалось отправить фото ботом. Попробуем открыть ссылку.');
-            setIsProcessing(false);
-            // If backend fails, fall through to fallback
+            if (btn) btn.style.opacity = '1';
         }
+        return;
     }
 
-    // 2. Fallback: Native Browser Download
+    // 2. Desktop/Web Fallback: Classic Download
     const link = document.createElement('a');
     link.href = dataUrl;
     link.download = filename;
@@ -702,7 +712,7 @@ const App: React.FC = () => {
                                  downloadImage(item.resultImage || item.originalImage, `stylevision_${item.id}.png`);
                               }}
                               className="absolute bottom-2 right-2 w-8 h-8 flex items-center justify-center bg-black/60 hover:bg-amber-600 text-white rounded-full transition-colors backdrop-blur-sm shadow-lg z-10"
-                              title="Скачать фото"
+                              title="Отправить в чат"
                            >
                               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
