@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Политика конфиденциальности - StyleVision AI</title>
+    <title>Политика в отношении обработки персональных данных - StyleVision</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -18,11 +18,21 @@
         h1, h2, h3, h4, .serif {
             font-family: 'Playfair Display', serif;
         }
+        /* Стилизация скроллбара для солидности */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #050505;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 4px;
+        }
     </style>
 </head>
 <body class="min-h-screen flex flex-col">
 
-    <!-- Header -->
     <header class="sticky top-0 z-50 backdrop-blur-md bg-black/80 border-b border-neutral-800">
         <div class="max-w-4xl mx-auto px-6 h-20 flex items-center justify-between">
             <a href="/" class="flex items-center gap-3 group">
@@ -34,75 +44,95 @@
                 </h1>
             </a>
             <a href="/" class="text-xs uppercase font-bold tracking-widest text-neutral-400 hover:text-white transition-colors border border-neutral-800 px-4 py-2 rounded-full">
-                На главную
+                Назад
             </a>
         </div>
     </header>
 
-    <!-- Content -->
     <main class="flex-grow py-12 px-6">
-        <div class="max-w-3xl mx-auto">
+        <div class="max-w-4xl mx-auto">
             <div class="text-center mb-12">
-                <span class="text-amber-500 text-xs font-bold tracking-[0.3em] uppercase block mb-3">Privacy & Data</span>
-                <h2 class="text-3xl md:text-5xl font-serif text-white mb-6">Политика конфиденциальности</h2>
-                <p class="text-neutral-500 text-sm">Редакция от 19.01.2026</p>
+                <span class="text-amber-500 text-xs font-bold tracking-[0.3em] uppercase block mb-3">Официальный документ</span>
+                <h2 class="text-2xl md:text-4xl font-serif text-white mb-6 leading-tight">Политика в отношении обработки персональных данных</h2>
+                <p class="text-neutral-500 text-sm">Вступает в силу с 19.01.2026</p>
             </div>
 
-            <div class="space-y-12 text-neutral-300 leading-relaxed font-light">
+            <div class="space-y-10 text-neutral-300 leading-relaxed font-light text-sm md:text-base text-justify">
                 
                 <section>
-                    <h3 class="text-xl text-white font-serif mb-4 flex items-center gap-3">
-                        <span class="text-amber-600">01.</span> Общие положения
+                    <h3 class="text-lg text-white font-serif mb-4 flex items-center gap-3">
+                        <span class="text-amber-600 font-sans">1.</span> Общие положения
                     </h3>
-                    <div class="bg-[#111] p-6 rounded-xl border border-neutral-800/50">
-                        <p class="mb-3">1.1. Настоящая Политика определяет порядок обработки персональных данных сервисом StyleVision AI.</p>
-                        <p>1.2. Оператором персональных данных является Передвигин Никита Владимирович (ИНН 13912267556).</p>
+                    <div class="bg-[#0f0f0f] p-6 rounded-xl border border-neutral-800/50 space-y-3">
+                        <p>1.1. Настоящая Политика разработана в соответствии с требованиями Федерального закона от 27.07.2006 № 152-ФЗ «О персональных данных» и определяет порядок обработки персональных данных и меры по обеспечению их безопасности.</p>
+                        <p>1.2. Оператором персональных данных является Передвигин Никита Владимирович (ИНН 13912267556) (далее — «Оператор»).</p>
+                        <p>1.3. Использование Сервиса StyleVision (далее — «Сервис») Пользователем означает его безусловное согласие с настоящей Политикой и условиями обработки его персональных данных. В случае несогласия с этими условиями Пользователь должен воздержаться от использования Сервиса.</p>
                     </div>
                 </section>
 
                 <section>
-                    <h3 class="text-xl text-white font-serif mb-4 flex items-center gap-3">
-                        <span class="text-amber-600">02.</span> Какие данные мы собираем
+                    <h3 class="text-lg text-white font-serif mb-4 flex items-center gap-3">
+                        <span class="text-amber-600 font-sans">2.</span> Состав персональных данных
                     </h3>
-                    <div class="bg-[#111] p-6 rounded-xl border border-neutral-800/50">
-                        <p class="mb-3">2.1. Мы собираем минимально необходимый набор данных для функционирования сервиса:</p>
-                        <ul class="list-disc list-inside space-y-2 text-neutral-400 pl-4">
-                            <li>ID пользователя Telegram;</li>
-                            <li>Имя пользователя (Username);</li>
-                            <li>Загруженные пользователем фотографии.</li>
+                    <div class="bg-[#0f0f0f] p-6 rounded-xl border border-neutral-800/50 space-y-3">
+                        <p>2.1. Оператор обрабатывает следующие данные Пользователя, необходимые для функционирования Сервиса:</p>
+                        <ul class="list-disc list-inside space-y-1 text-neutral-400 pl-2">
+                            <li>Идентификатор пользователя в мессенджере Telegram (Telegram ID);</li>
+                            <li>Публичное имя пользователя (Username) и имя профиля;</li>
+                            <li>Изображения (фотографии), загружаемые Пользователем для обработки;</li>
+                            <li>Технические данные, автоматически передаваемые устройством Пользователя (IP-адрес, информация о браузере, технические характеристики оборудования и ПО).</li>
+                        </ul>
+                        <p class="text-amber-500/80 text-xs mt-2 border-l-2 border-amber-500 pl-3 py-1">
+                            Важно: Оператор не проверяет достоверность предоставляемых персональных данных и дееспособность Пользователя.
+                        </p>
+                    </div>
+                </section>
+
+                <section>
+                    <h3 class="text-lg text-white font-serif mb-4 flex items-center gap-3">
+                        <span class="text-amber-600 font-sans">3.</span> Цели обработки
+                    </h3>
+                    <div class="bg-[#0f0f0f] p-6 rounded-xl border border-neutral-800/50">
+                        <p>Обработка персональных данных Пользователя осуществляется исключительно в следующих целях:</p>
+                        <ul class="list-disc list-inside space-y-2 text-neutral-400 mt-3 pl-2">
+                            <li>Предоставление Пользователю доступа к функционалу Сервиса (включая автоматизированную обработку изображений);</li>
+                            <li>Установление с Пользователем обратной связи, обработка запросов и заявок;</li>
+                            <li>Улучшение качества работы Сервиса, разработка новых функций;</li>
+                            <li>Исполнение обязательств по соглашениям, заключенным с Пользователем.</li>
                         </ul>
                     </div>
                 </section>
 
                 <section>
-                    <h3 class="text-xl text-white font-serif mb-4 flex items-center gap-3">
-                        <span class="text-amber-600">03.</span> Цели обработки данных
+                    <h3 class="text-lg text-white font-serif mb-4 flex items-center gap-3">
+                        <span class="text-amber-600 font-sans">4.</span> Порядок обработки и передача данных
                     </h3>
-                    <div class="bg-[#111] p-6 rounded-xl border border-neutral-800/50">
-                        <p class="mb-2">3.1. Предоставление доступа к функционалу сервиса (редактирование фото).</p>
-                        <p class="mb-2">3.2. Обратная связь с пользователем и техническая поддержка.</p>
-                        <p>3.3. Исполнение обязательств по договору оферты.</p>
+                    <div class="bg-[#0f0f0f] p-6 rounded-xl border border-neutral-800/50 space-y-3">
+                        <p>4.1. Обработка персональных данных осуществляется как с использованием средств автоматизации, так и без использования таких средств.</p>
+                        <p>4.2. Пользователь соглашается с тем, что Оператор вправе поручить обработку персональных данных (включая изображения) третьим лицам (провайдерам вычислительных мощностей, хостинг-провайдерам, техническим партнерам) для выполнения функционала Сервиса. Трансграничная передача данных осуществляется в страны, обеспечивающие адекватную защиту прав субъектов персональных данных, либо на основании согласия Пользователя в целях исполнения договора (оказания услуг Сервиса).</p>
+                        <p>4.3. Данные хранятся до момента отзыва согласия Пользователем, если иное не предусмотрено законодательством РФ.</p>
                     </div>
                 </section>
 
                 <section>
-                    <h3 class="text-xl text-white font-serif mb-4 flex items-center gap-3">
-                        <span class="text-amber-600">04.</span> Передача данных и ИИ
+                    <h3 class="text-lg text-white font-serif mb-4 flex items-center gap-3">
+                        <span class="text-amber-600 font-sans">5.</span> Ответственность и контент
                     </h3>
-                    <div class="bg-[#111] p-6 rounded-xl border border-neutral-800/50">
-                        <p class="mb-3">4.1. Мы не передаем ваши персональные данные третьим лицам для маркетинговых целей.</p>
-                        <p class="mb-3">4.2. Пользователь соглашается с тем, что для выполнения основной функции сервиса (редактирования фото) загруженные изображения могут передаваться в автоматизированные системы партнеров, предоставляющих технологии искусственного интеллекта (в т.ч. Google Gemini/Vertex AI), исключительно с целью машинной обработки.</p>
-                        <p>4.3. Хранение данных осуществляется в зашифрованном виде.</p>
+                    <div class="bg-[#0f0f0f] p-6 rounded-xl border border-neutral-800/50 space-y-3">
+                        <p class="font-medium text-white">5.1. Ответственность Пользователя:</p>
+                        <p>Пользователь гарантирует, что обладает всеми необходимыми правами и согласиями на загрузку изображений в Сервис. Ответственность за нарушение прав третьих лиц (включая авторские права и право на изображение гражданина) при загрузке контента полностью несет Пользователь.</p>
+                        <p class="font-medium text-white mt-4">5.2. Ограничение ответственности Оператора:</p>
+                        <p>Оператор принимает необходимые организационные и технические меры для защиты персональной информации, однако Пользователь понимает, что в сети Интернет невозможно гарантировать 100% защиту от несанкционированного доступа третьих лиц. Оператор не несет ответственности за убытки, возникшие вследствие такого доступа.</p>
                     </div>
                 </section>
 
                 <section>
-                    <h3 class="text-xl text-white font-serif mb-4 flex items-center gap-3">
-                        <span class="text-amber-600">05.</span> Права пользователя
+                    <h3 class="text-lg text-white font-serif mb-4 flex items-center gap-3">
+                        <span class="text-amber-600 font-sans">6.</span> Заключительные положения
                     </h3>
-                    <div class="bg-[#111] p-6 rounded-xl border border-neutral-800/50">
-                        <p class="mb-3">5.1. Пользователь может в любой момент отозвать согласие на обработку данных или запросить удаление всей информации о себе.</p>
-                        <p>5.2. Для удаления данных необходимо написать запрос в поддержку: <a href="mailto:info@stylevision.fun" class="text-amber-500 hover:underline">info@stylevision.fun</a>.</p>
+                    <div class="bg-[#0f0f0f] p-6 rounded-xl border border-neutral-800/50 space-y-3">
+                        <p>6.1. Пользователь может в любой момент отозвать свое согласие на обработку персональных данных, направив уведомление на электронную почту: <a href="mailto:info@stylevision.fun" class="text-amber-500 hover:text-amber-400 transition-colors">info@stylevision.fun</a>.</p>
+                        <p>6.2. Оператор имеет право вносить изменения в настоящую Политику без согласия и предварительного уведомления Пользователя. Новая редакция вступает в силу с момента ее размещения.</p>
                     </div>
                 </section>
 
@@ -110,9 +140,9 @@
         </div>
     </main>
 
-    <!-- Footer -->
-    <footer class="border-t border-neutral-900 py-8 text-center">
-        <p class="text-neutral-600 text-xs">© 2026 StyleVision AI. Все права защищены.</p>
+    <footer class="border-t border-neutral-900 py-8 text-center mt-8">
+        <p class="text-neutral-600 text-xs">© 2026 StyleVision. Все права защищены.</p>
+        <p class="text-neutral-700 text-[10px] mt-2">ИП Передвигин Н.В., ИНН 13912267556</p>
     </footer>
 
 </body>
