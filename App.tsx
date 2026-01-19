@@ -85,34 +85,48 @@ const App: React.FC = () => {
 
   // Helper: Download/Share Image
   const downloadImage = async (dataUrl: string, filename: string) => {
-    // Check if running in Telegram Mini App
     const tg = (window as any).Telegram?.WebApp;
     const isTg = !!tg && !!tg.initData;
 
-    // 1. If in Telegram, try Native Share first
-    if (isTg) {
-      try {
-        const res = await fetch(dataUrl);
-        const blob = await res.blob();
-        
-        if (navigator.share && navigator.canShare) {
-           const file = new File([blob], filename, { type: blob.type });
-           // Some browsers/webviews might require files array check
-           if (navigator.canShare({ files: [file] })) {
-             await navigator.share({
-                files: [file],
-                title: 'StyleVision Look',
-                text: 'Мой новый образ от StyleVision AI'
-             });
-             return; // Successfully shared via OS dialog
-           }
+    // 1. Logic for Telegram / Mobile Native Share
+    // We attempt this if we are in Telegram OR if the browser supports sharing
+    if (isTg || (navigator.share && navigator.canShare)) {
+        try {
+            // A. Fetch & Convert to File
+            const res = await fetch(dataUrl);
+            const blob = await res.blob();
+            const file = new File([blob], filename, { type: blob.type });
+
+            // B. Validate & Share
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                await navigator.share({
+                    files: [file],
+                    title: 'StyleVision Look',
+                    text: 'Мой новый образ от StyleVision AI'
+                });
+                return; // Success, stop here
+            } else {
+                throw new Error("Ваше устройство не поддерживает отправку файлов");
+            }
+        } catch (e: any) {
+            // C. Debug Alert (Temporary, as requested)
+            alert(`Ошибка Sharing: ${e.message || JSON.stringify(e)}`);
+
+            // D. Fallback for Telegram: Open in External Browser
+            if (isTg) {
+                try {
+                    // Force open system browser to let user save/share from there
+                    tg.openLink(dataUrl); 
+                } catch (linkError: any) {
+                    alert(`Fallback OpenLink Error: ${linkError.message}`);
+                }
+                return;
+            }
+            // If not TG, we fall through to the standard <a> tag download below
         }
-      } catch (e) {
-        console.error("Native share failed, falling back to download", e);
-      }
     }
 
-    // 2. Default Browser Download (Fallback)
+    // 2. Standard Desktop/Browser Download (Fallback)
     const link = document.createElement('a');
     link.href = dataUrl;
     link.download = filename;
