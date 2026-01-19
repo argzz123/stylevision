@@ -88,45 +88,43 @@ const App: React.FC = () => {
     const tg = (window as any).Telegram?.WebApp;
     const isTg = !!tg && !!tg.initData;
 
-    // 1. Logic for Telegram / Mobile Native Share
-    // We attempt this if we are in Telegram OR if the browser supports sharing
-    if (isTg || (navigator.share && navigator.canShare)) {
+    // 1. TELEGRAM MODE: Send via Bot
+    if (isTg && user?.id) {
         try {
-            // A. Fetch & Convert to File
-            const res = await fetch(dataUrl);
-            const blob = await res.blob();
-            const file = new File([blob], filename, { type: blob.type });
+            // Show global processing state or a toast would be better, but we use what we have
+            const prevMessage = processingMessage;
+            setIsProcessing(true);
+            setProcessingMessage('Отправляем фото в чат...');
 
-            // B. Validate & Share
-            if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                await navigator.share({
-                    files: [file],
-                    title: 'StyleVision Look',
-                    text: 'Мой новый образ от StyleVision AI'
-                });
-                return; // Success, stop here
-            } else {
-                throw new Error("Ваше устройство не поддерживает отправку файлов");
-            }
-        } catch (e: any) {
-            // C. Debug Alert (Temporary, as requested)
-            alert(`Ошибка Sharing: ${e.message || JSON.stringify(e)}`);
+            // Call our new backend endpoint
+            const response = await fetch('https://stylevision.vercel.app/api/send-photo', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    chatId: user.id,
+                    image: dataUrl,
+                    caption: 'Ваш образ от StyleVision AI ✨'
+                })
+            });
 
-            // D. Fallback for Telegram: Open in External Browser
-            if (isTg) {
-                try {
-                    // Force open system browser to let user save/share from there
-                    tg.openLink(dataUrl); 
-                } catch (linkError: any) {
-                    alert(`Fallback OpenLink Error: ${linkError.message}`);
-                }
-                return;
-            }
-            // If not TG, we fall through to the standard <a> tag download below
+            if (!response.ok) throw new Error('Failed to send');
+
+            alert('Фото отправлено вам в личные сообщения!');
+            
+            // Restore state
+            setProcessingMessage(prevMessage);
+            setIsProcessing(false);
+            return;
+
+        } catch (e) {
+            console.error(e);
+            alert('Не удалось отправить фото ботом. Попробуем открыть ссылку.');
+            setIsProcessing(false);
+            // If backend fails, fall through to fallback
         }
     }
 
-    // 2. Standard Desktop/Browser Download (Fallback)
+    // 2. Fallback: Native Browser Download
     const link = document.createElement('a');
     link.href = dataUrl;
     link.download = filename;
