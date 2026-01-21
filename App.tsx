@@ -40,7 +40,7 @@ const App: React.FC = () => {
   // Config State
   const [globalConfig, setGlobalConfig] = useState<GlobalConfig>({ 
       price: "1.00", 
-      productTitle: "StyleVision PRO", 
+      productTitle: "StyleVision AI+", 
       productDescription: "",
       maintenanceMode: false
   });
@@ -51,6 +51,7 @@ const App: React.FC = () => {
   const [showAdminPanel, setShowAdminPanel] = useState(false); 
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [showGuestLockModal, setShowGuestLockModal] = useState(false);
+  const [showProInfoModal, setShowProInfoModal] = useState(false);
   
   // Data State
   const [originalImage, setOriginalImage] = useState<string | null>(null);
@@ -83,10 +84,30 @@ const App: React.FC = () => {
   // Helper: Is Admin?
   const isAdmin = (id: number) => ADMIN_IDS.includes(id);
 
-  // Helper: Download Image (Robust)
+  // Helper: Download Image (Robust with Context Check)
   const downloadImage = async (dataUrl: string, filename: string) => {
+    // Check if running inside Telegram WebApp
+    const tg = (window as any).Telegram?.WebApp;
+    const isTelegram = !!tg?.initData;
+
+    if (isTelegram) {
+        // STRATEGY FOR TELEGRAM: Open Link Externally
+        // Telegram Mini Apps struggle with blob downloads, so we open the URL directly
+        // relying on the browser to handle the image view/save.
+        if (dataUrl.startsWith('http')) {
+             tg.openLink(dataUrl);
+        } else {
+             // Fallback for Base64: Try to open in new system window or alert
+             // Usually Base64 is only present during Preview or Try-on before saving.
+             // If user saves to wardrobe, it becomes a URL.
+             alert("Сохраните образ в гардероб, чтобы открыть полную версию.");
+             // window.open(dataUrl, '_blank'); // Often blocked in TG
+        }
+        return;
+    }
+
+    // STRATEGY FOR BROWSER: Force Download via Blob
     try {
-       // 1. If it's Base64, simple download
        if (dataUrl.startsWith('data:')) {
            const link = document.createElement('a');
            link.href = dataUrl;
@@ -95,8 +116,6 @@ const App: React.FC = () => {
            link.click();
            document.body.removeChild(link);
        } else {
-           // 2. If it's a URL (e.g. Supabase), fetch as blob to force download
-           // This prevents the browser from just opening the image in a new tab
            const response = await fetch(dataUrl);
            const blob = await response.blob();
            const blobUrl = window.URL.createObjectURL(blob);
@@ -112,7 +131,6 @@ const App: React.FC = () => {
        }
     } catch (e) {
        console.error("Download failed:", e);
-       // Fallback: Open in new tab if blob fetching fails
        window.open(dataUrl, '_blank');
     }
   };
@@ -132,15 +150,16 @@ const App: React.FC = () => {
   // Initialize and Check Session
   useEffect(() => {
     const initApp = async () => {
-        // Load global pricing config
         const config = await storageService.getGlobalConfig();
         setGlobalConfig(config);
 
-        // 1. Check if running inside Telegram WebApp
         const tg = (window as any).Telegram?.WebApp;
         if (tg) {
             tg.ready();
             tg.expand();
+            // Force dark header color to match app
+            tg.setHeaderColor('#050505');
+            
             const tgUser = tg.initDataUnsafe?.user;
             if (tgUser) {
                 const fullUser = { ...tgUser, isGuest: false };
@@ -153,7 +172,6 @@ const App: React.FC = () => {
             }
         }
 
-        // 2. Check LocalStorage for persistent session (Fix for refresh issue)
         const storedUser = localStorage.getItem('stylevision_current_user');
         if (storedUser) {
             try {
@@ -174,12 +192,10 @@ const App: React.FC = () => {
     initApp();
   }, []);
 
-  // Memoized to prevent LoginScreen re-renders which reload the Widget
   const handleLogin = useCallback(async (userData: TelegramUser) => {
      setUser(userData);
-     localStorage.setItem('stylevision_current_user', JSON.stringify(userData)); // Persist session
-     
-     await storageService.saveUser(userData); // Async persist to DB
+     localStorage.setItem('stylevision_current_user', JSON.stringify(userData));
+     await storageService.saveUser(userData);
      await loadUserData(userData.id);
      setIsAuthChecking(false);
   }, []);
@@ -193,39 +209,33 @@ const App: React.FC = () => {
   }, []);
 
   const loadUserData = async (userId: number) => {
-    // 1. Load History via Service (Async)
     const savedHistory = await storageService.getHistory(userId);
     setHistory(savedHistory);
 
-    // 2. Check Pro Status via Service (Async)
     let proStatus = await storageService.getProStatus(userId);
 
-    // 3. Payment Verification (Robust Check)
     const pendingPaymentId = localStorage.getItem('pending_payment_id');
     if (pendingPaymentId) {
         setProcessingMessage('Проверка платежа...');
-        // We show a subtle loading state logic if needed, but for now just check
         const isPaid = await checkPaymentStatus(pendingPaymentId);
         
         if (isPaid) {
             proStatus = true;
             await storageService.setProStatus(userId, true);
-            alert("Оплата прошла успешно! PRO режим активирован.");
+            alert("Оплата прошла успешно! AI+ режим активирован.");
             setShowPaymentModal(false);
         }
-        // Clean up pending ID regardless of result so we don't loop check
         localStorage.removeItem('pending_payment_id');
     }
     
     setIsPro(proStatus);
   };
 
-  // Helper to check limits
   const checkLimit = async (): Promise<boolean> => {
      if (!user) return false;
      if (isPro) return true;
 
-     const count = await storageService.getRecentGenerationsCount(user.id, 5); // Check last 5 hours
+     const count = await storageService.getRecentGenerationsCount(user.id, 5); 
      if (count >= FREE_LIMIT) {
          setShowLimitModal(true);
          return false;
@@ -238,7 +248,7 @@ const App: React.FC = () => {
 
     try {
         const newItem: HistoryItem = {
-          id: Date.now().toString(), // Client-side ID for UI, DB will generate UUID
+          id: Date.now().toString(),
           date: new Date().toLocaleDateString('ru-RU'),
           originalImage: originalImage,
           resultImage: img,
@@ -247,10 +257,7 @@ const App: React.FC = () => {
           recommendations: recommendations
         };
 
-        // Update State immediately for responsiveness
         setHistory(prev => [newItem, ...prev].slice(0, 20));
-        
-        // Persist via Service (Async)
         await storageService.saveHistoryItem(user.id, newItem);
 
     } catch (err) {
@@ -326,8 +333,7 @@ const App: React.FC = () => {
         setIsProcessing(true);
         setProcessingMessage('Соединение с ЮKassa...');
         
-        // Use global config for price and description
-        const payment = await createPayment(globalConfig.price, globalConfig.productDescription || "Подписка StyleVision PRO");
+        const payment = await createPayment(globalConfig.price, globalConfig.productDescription || "Подписка StyleVision AI+");
         
         if (payment.confirmation && payment.confirmation.confirmation_url) {
             window.location.href = payment.confirmation.confirmation_url;
@@ -342,7 +348,6 @@ const App: React.FC = () => {
   };
 
   const performAnalysis = async () => {
-     // GUEST BLOCK CHECK
      if (user?.isGuest) {
          setShowGuestLockModal(true);
          return;
@@ -356,7 +361,7 @@ const App: React.FC = () => {
       const analysisResult = await analyzeUserImage(
           originalImage!, 
           analysisMode,
-          (msg) => setProcessingMessage(msg) // Callback for queue updates
+          (msg) => setProcessingMessage(msg)
       );
       setAnalysis(analysisResult);
       
@@ -369,7 +374,7 @@ const App: React.FC = () => {
             season: selectedSeason,
             occasion: selectedOccasion
           },
-          (msg) => setProcessingMessage(msg) // Callback for queue updates
+          (msg) => setProcessingMessage(msg)
       );
       setRecommendations(styles);
       if (styles.length > 0) setSelectedStyleId(styles[0].id);
@@ -378,7 +383,6 @@ const App: React.FC = () => {
       setAppState(AppState.RESULTS);
     } catch (error: any) {
       console.error(error);
-      // SHOW REAL ERROR MESSAGE TO USER (Now beautified by mapFriendlyError)
       alert(error.message);
       setAppState(AppState.UPLOAD);
     } finally {
@@ -391,13 +395,11 @@ const App: React.FC = () => {
   const handleApplyStyle = async (style: StyleRecommendation) => {
     if (!originalImage || !analysis) return;
     
-    // GUEST BLOCK CHECK
     if (user?.isGuest) {
         setShowGuestLockModal(true);
         return;
     }
 
-    // Check Limit
     const canProceed = await checkLimit();
     if (!canProceed) return;
 
@@ -405,7 +407,6 @@ const App: React.FC = () => {
       setIsProcessing(true);
       setActiveMobileTab('STUDIO'); 
       
-      // Fix: Safely handle undefined title with fallback
       const safeTitle = style.title || "Стильный образ";
       setProcessingMessage(`Примеряем образ "${safeTitle}"...`);
       
@@ -428,11 +429,10 @@ const App: React.FC = () => {
           originalImage, 
           prompt, 
           undefined,
-          (msg) => setProcessingMessage(msg) // Callback for queue updates
+          (msg) => setProcessingMessage(msg)
       );
       setCurrentImage(newImage);
       
-      // Saving runs in background
       saveToHistory(newImage, safeTitle);
 
     } catch (error: any) {
@@ -447,13 +447,11 @@ const App: React.FC = () => {
      e.preventDefault();
      if (!currentImage || !editPrompt.trim()) return;
 
-     // GUEST BLOCK CHECK
      if (user?.isGuest) {
          setShowGuestLockModal(true);
          return;
      }
 
-     // Check Limit
      const canProceed = await checkLimit();
      if (!canProceed) return;
 
@@ -464,11 +462,10 @@ const App: React.FC = () => {
             currentImage, 
             editPrompt,
             undefined,
-            (msg) => setProcessingMessage(msg) // Callback for queue updates
+            (msg) => setProcessingMessage(msg)
         );
         setCurrentImage(newImage);
         
-        // Background save
         saveToHistory(newImage, "Edit: " + editPrompt);
         
         setEditPrompt('');
@@ -498,7 +495,7 @@ const App: React.FC = () => {
 
   const handleGuestToLogin = () => {
       setShowGuestLockModal(false);
-      handleLogout(); // This will clear guest session and show LoginScreen
+      handleLogout();
   };
 
   // 1. Loading
@@ -519,6 +516,7 @@ const App: React.FC = () => {
   if (globalConfig.maintenanceMode && !isAdmin(user.id)) {
       return (
           <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center p-6 text-center animate-fade-in">
+              {/* ... Maintenance UI ... */}
               <div className="w-24 h-24 bg-yellow-900/20 border border-yellow-600/50 rounded-full flex items-center justify-center mb-8">
                   <svg className="w-12 h-12 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
@@ -526,16 +524,8 @@ const App: React.FC = () => {
               </div>
               <h1 className="text-3xl font-serif text-white mb-4">Мы обновляемся</h1>
               <p className="text-neutral-400 max-w-md mb-8 leading-relaxed">
-                  В данный момент проводятся технические работы для улучшения сервиса. Мы скоро вернемся! Приносим извинения за неудобства.
+                  В данный момент проводятся технические работы.
               </p>
-              
-              <div className="border-t border-neutral-800 pt-6 w-full max-w-xs">
-                  <p className="text-xs text-neutral-500 uppercase tracking-widest mb-3">Связаться с нами</p>
-                  <a href="https://t.me/Nikita_Peredvigin" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 bg-[#2AABEE] hover:bg-[#229ED9] text-white py-3 rounded-lg font-bold transition-colors">
-                     <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
-                     @Nikita_Peredvigin
-                  </a>
-              </div>
           </div>
       );
   }
@@ -565,7 +555,6 @@ const App: React.FC = () => {
           
           <div className="flex items-center gap-4">
              
-             {/* Return to Home Button (Visible in sub-states) */}
              {appState !== AppState.UPLOAD && (
                  <button 
                     onClick={resetApp}
@@ -576,7 +565,6 @@ const App: React.FC = () => {
                  </button>
              )}
 
-             {/* ADMIN BUTTON - NOW VISIBLE ON MOBILE */}
              {isAdmin(user.id) && (
                 <button 
                   onClick={() => setShowAdminPanel(true)}
@@ -595,13 +583,22 @@ const App: React.FC = () => {
                 {user.username || user.first_name}
              </div>
 
-             {!isPro && (
+             {/* SUBSCRIPTION BUTTON TOGGLE */}
+             {!isPro ? (
                 <button 
                   onClick={handleBuyProClick}
                   className="bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-black text-xs font-bold px-4 py-2 rounded-full transition-all shadow-lg shadow-amber-900/20 flex items-center gap-1.5"
                 >
-                    <span className="hidden sm:inline">Купить PRO</span>
-                    <span className="sm:hidden">PRO</span>
+                    <span className="hidden sm:inline">Купить AI+</span>
+                    <span className="sm:hidden">AI+</span>
+                </button>
+             ) : (
+                <button 
+                  onClick={() => setShowProInfoModal(true)}
+                  className="border border-amber-500/50 bg-transparent hover:bg-amber-900/20 text-amber-500 text-xs font-bold px-4 py-2 rounded-full transition-all flex items-center gap-1.5"
+                >
+                    <span className="hidden sm:inline">AI+ Active</span>
+                    <span className="sm:hidden">AI+</span>
                 </button>
              )}
              
@@ -616,6 +613,40 @@ const App: React.FC = () => {
       {/* ADMIN PANEL OVERLAY */}
       {showAdminPanel && isAdmin(user.id) && (
          <AdminPanel onClose={() => setShowAdminPanel(false)} currentUserId={user.id} />
+      )}
+
+      {/* SUBSCRIPTION INFO MODAL */}
+      {showProInfoModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in">
+             <div className="relative w-full max-w-sm bg-[#0a0a0a] border border-amber-500/30 rounded-2xl p-8 shadow-2xl shadow-amber-900/10 overflow-hidden text-center">
+                <button onClick={() => setShowProInfoModal(false)} className="absolute top-4 right-4 text-neutral-500 hover:text-white">
+                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+                
+                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-amber-900/20 border border-amber-500/50 flex items-center justify-center">
+                    <span className="text-2xl">✨</span>
+                </div>
+                
+                <h2 className="text-2xl font-serif text-white mb-2">AI+ Активирован</h2>
+                <p className="text-amber-500 text-sm font-bold tracking-widest uppercase mb-6">Ваша подписка активна</p>
+                
+                <div className="bg-neutral-900/50 rounded-xl p-4 border border-neutral-800 mb-6 text-left space-y-3">
+                    <div className="flex items-center gap-3 text-sm text-neutral-300">
+                        <span className="text-green-500">✓</span> Безлимитная генерация
+                    </div>
+                    <div className="flex items-center gap-3 text-sm text-neutral-300">
+                        <span className="text-green-500">✓</span> Приоритетная очередь
+                    </div>
+                    <div className="flex items-center gap-3 text-sm text-neutral-300">
+                        <span className="text-green-500">✓</span> Доступ к примерке
+                    </div>
+                </div>
+                
+                <button onClick={() => setShowProInfoModal(false)} className="w-full bg-white text-black font-bold py-3 rounded-xl hover:bg-neutral-200 transition-colors">
+                    Отлично
+                </button>
+             </div>
+        </div>
       )}
 
       {/* GUEST LOCK MODAL */}
@@ -698,7 +729,6 @@ const App: React.FC = () => {
                         <div className="aspect-[3/4] relative overflow-hidden group/image">
                            <img src={item.resultImage || item.originalImage} className="w-full h-full object-cover" alt="History" />
                            
-                           {/* Download Button (Updated to Force Download) */}
                            <button 
                               onClick={(e) => {
                                  e.stopPropagation();
@@ -712,7 +742,6 @@ const App: React.FC = () => {
                               </svg>
                            </button>
 
-                           {/* Delete Button */}
                            <button 
                               onClick={(e) => handleDeleteHistoryItem(e, item.id)}
                               className="absolute bottom-2 right-12 w-8 h-8 flex items-center justify-center bg-black/60 hover:bg-red-600 text-white rounded-full transition-colors backdrop-blur-sm shadow-lg z-10"
@@ -762,9 +791,8 @@ const App: React.FC = () => {
                             <span className="font-serif text-3xl text-amber-500 italic">S</span>
                         </div>
                     </div>
-                    <h2 className="text-2xl font-serif text-white mb-2">{globalConfig.productTitle || "StyleVision PRO"}</h2>
+                    <h2 className="text-2xl font-serif text-white mb-2">{globalConfig.productTitle || "StyleVision AI+"}</h2>
                     
-                    {/* Updated Product Description Area */}
                     <div className="bg-neutral-900/50 rounded-xl p-4 border border-neutral-800 mb-6">
                         <div className="flex justify-between items-center mb-3 pb-3 border-b border-neutral-800">
                             <span className="text-neutral-400 text-sm">Стоимость</span>
@@ -795,8 +823,9 @@ const App: React.FC = () => {
                         )}
                     </button>
                     
-                    <p className="mt-4 text-[10px] text-neutral-600">
-                       Нажимая кнопку, вы соглашаетесь с условиями оферты.
+                    {/* Updated Legal Text with Link */}
+                    <p className="mt-4 text-[10px] text-neutral-500">
+                       Нажимая кнопку, вы соглашаетесь с условиями <a href="https://stylevision.fun/offer.html" target="_blank" rel="noopener noreferrer" className="text-amber-600 hover:underline">публичной оферты</a>.
                     </p>
                 </div>
             </div>
