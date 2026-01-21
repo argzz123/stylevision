@@ -15,6 +15,49 @@ const getMimeType = (base64: string) => {
   return match ? match[1] : 'image/jpeg';
 };
 
+// --- IMAGE COMPRESSION UTILITY ---
+const compressImage = (base64Str: string, maxWidth = 1024, quality = 0.8): Promise<string> => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.src = base64Str;
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let width = img.width;
+      let height = img.height;
+
+      // Calculate new dimensions
+      if (width > height) {
+        if (width > maxWidth) {
+          height *= maxWidth / width;
+          width = maxWidth;
+        }
+      } else {
+        if (height > maxWidth) {
+          width *= maxWidth / height;
+          height = maxWidth;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          // Always convert to JPEG for efficiency, even if original was PNG
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+          resolve(compressedDataUrl);
+      } else {
+          // Fallback if canvas context fails
+          resolve(base64Str);
+      }
+    };
+    img.onerror = () => {
+       // Fallback if image fails to load
+       resolve(base64Str);
+    };
+  });
+};
+
 // Helper to safely parse JSON
 const parseJSON = (text: string) => {
   try {
@@ -72,14 +115,18 @@ const mapFriendlyError = (error: any): Error => {
     if (msg.includes('quota') || msg.includes('429')) {
         return new Error("Превышен лимит запросов к API. Подождите немного.");
     }
-    if (msg.includes('network') || msg.includes('fetch')) {
-        return new Error("Проблема с интернет-соединением. Проверьте сеть.");
+    if (msg.includes('payload too large') || msg.includes('413')) {
+        return new Error("Фото слишком большое для обработки. Мы попробовали его сжать, но не вышло. Попробуйте другое фото.");
+    }
+    if (msg.includes('network') || msg.includes('fetch') || msg.includes('failed to fetch')) {
+        return new Error("Ошибка сети. Возможно, файл слишком тяжелый или интернет нестабилен.");
     }
     if (msg.includes('no human') || msg.includes('на фото не найден')) {
         return new Error("На фото не найден человек. Загрузите четкое фото в полный рост или портрет.");
     }
     
     // Default Fallback
+    console.error("Unknown Error caught:", msg);
     return new Error("Упс! ИИ задумался и не выдал результат. Попробуйте еще раз.");
 };
 
@@ -154,8 +201,19 @@ const callGeminiProxy = async (
             });
 
             if (!response.ok) {
-                const err = await response.json();
-                const errMsg = err.error?.message || err.error || 'Proxy Error';
+                // Handle Vercel Serverless Function Limits (413 Payload Too Large)
+                if (response.status === 413) {
+                    throw new Error("Payload Too Large (413). Image is too big.");
+                }
+                
+                // Try to parse JSON error, if fails (e.g. Vercel HTML error page), throw text
+                let errMsg = 'Proxy Error';
+                try {
+                    const err = await response.json();
+                    errMsg = err.error?.message || err.error || 'Proxy Error';
+                } catch (e) {
+                    errMsg = `Server Error (${response.status})`;
+                }
                 throw new Error(errMsg);
             }
 
@@ -217,6 +275,10 @@ export const analyzeUserImage = async (
     };
   }
 
+  // COMPRESS BEFORE SENDING
+  if (onStatusUpdate) onStatusUpdate("Оптимизация фото...");
+  const compressedImage = await compressImage(base64Image, 1024, 0.75);
+
   let promptInstructions = "";
   if (mode === 'OBJECTIVE') {
     promptInstructions = `
@@ -253,7 +315,7 @@ export const analyzeUserImage = async (
   try {
     const contents = {
         parts: [
-            { inlineData: { mimeType: getMimeType(base64Image), data: cleanBase64(base64Image) } },
+            { inlineData: { mimeType: 'image/jpeg', data: cleanBase64(compressedImage) } },
             { text: prompt }
         ]
     };
@@ -432,12 +494,18 @@ export const editUserImage = async (
 
   const model = 'gemini-2.5-flash-image';
 
+  // COMPRESS BEFORE SENDING
+  if (onStatusUpdate) onStatusUpdate("Оптимизация фото...");
+  const compressedImage = await compressImage(base64Image, 1024, 0.85);
+
   const parts: any[] = [
-    { inlineData: { data: cleanBase64(base64Image), mimeType: getMimeType(base64Image) } }
+    { inlineData: { data: cleanBase64(compressedImage), mimeType: 'image/jpeg' } }
   ];
 
   if (maskImage) {
-    parts.push({ inlineData: { data: cleanBase64(maskImage), mimeType: 'image/png' } });
+    // Also compress mask slightly to be safe
+    const compressedMask = await compressImage(maskImage, 1024, 0.85);
+    parts.push({ inlineData: { data: cleanBase64(compressedMask), mimeType: 'image/jpeg' } });
     textPrompt = `${textPrompt}. Use the second image as a mask.`;
   }
   parts.push({ text: textPrompt });
