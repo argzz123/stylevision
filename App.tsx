@@ -74,9 +74,6 @@ const App: React.FC = () => {
   const [showHistory, setShowHistory] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   
-  // Mobile Tab State
-  const [activeMobileTab, setActiveMobileTab] = useState<MobileTab>('COLLECTION');
-  
   // Editing State
   const [editPrompt, setEditPrompt] = useState('');
 
@@ -307,8 +304,6 @@ const App: React.FC = () => {
         setRecommendations(item.recommendations);
         if (item.recommendations.length > 0) setSelectedStyleId(item.recommendations[0].id);
      }
-     
-     setActiveMobileTab('STUDIO');
   };
 
   useEffect(() => {
@@ -409,7 +404,6 @@ const App: React.FC = () => {
       setRecommendations(styles);
       if (styles.length > 0) setSelectedStyleId(styles[0].id);
       
-      setActiveMobileTab('COLLECTION'); 
       setAppState(AppState.RESULTS);
     } catch (error: any) {
       console.error(error);
@@ -435,7 +429,6 @@ const App: React.FC = () => {
 
     try {
       setIsProcessing(true);
-      setActiveMobileTab('STUDIO'); 
       
       const safeTitle = style.title || "Стильный образ";
       setProcessingMessage(`Примеряем образ "${safeTitle}"...`);
@@ -1093,80 +1086,95 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Results State - RESTORED */}
+        {/* Results State - RESTORED TO CLASSIC LAYOUT */}
         {appState === AppState.RESULTS && (
-           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[calc(100vh-140px)] animate-fade-in">
-              
-              {/* Left Column: Image Area (Studio) */}
-              <div className={`md:col-span-2 flex flex-col h-full ${activeMobileTab === 'STUDIO' ? 'block' : 'hidden md:flex'}`}>
-                 <div className="flex-grow bg-black relative rounded-xl overflow-hidden border border-neutral-800 flex items-center justify-center">
-                    {/* Main Image Display */}
-                     {currentImage ? (
-                        <div className="relative w-full h-full">
-                           <BeforeAfterSlider 
-                              beforeImage={originalImage!} 
-                              afterImage={currentImage} 
-                           />
-                           {/* Actions overlay */}
-                           <div className="absolute top-4 right-4 flex gap-2 z-20">
-                              <button onClick={() => downloadImage(currentImage, `stylevision_${Date.now()}.png`)} className="bg-black/50 hover:bg-black/70 text-white p-2 rounded-full backdrop-blur transition-all">
-                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                              </button>
-                           </div>
-                        </div>
-                     ) : (
-                        <div className="animate-pulse bg-neutral-900 w-full h-full flex items-center justify-center">
-                            <span className="text-neutral-700">Загрузка изображения...</span>
-                        </div>
-                     )}
-                     
-                     {/* Processing Overlay inside Image Area */}
-                     {isProcessing && (
-                         <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-30 flex flex-col items-center justify-center text-center p-6 animate-fade-in">
-                             <div className="w-16 h-16 border-4 border-amber-600 border-t-transparent rounded-full animate-spin mb-6"></div>
-                             <p className="text-xl font-serif text-white mb-2">{processingMessage || 'Обработка...'}</p>
-                             <p className="text-sm text-neutral-400">Это может занять 10-20 секунд</p>
-                         </div>
-                     )}
-                 </div>
-                 
-                 {/* Editor Controls - Simplified */}
-                 <div className="mt-4">
-                     <ImageEditor 
+           <div className="max-w-7xl mx-auto animate-fade-in pb-20">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12 items-start">
+                  {/* Left Column: Image Area & Analysis */}
+                  <div className="space-y-6">
+                      <div className="aspect-[3/4] relative rounded-xl overflow-hidden border border-neutral-800 bg-black">
+                         {/* Main Image Display */}
+                         {currentImage ? (
+                            <div className="relative w-full h-full">
+                               <BeforeAfterSlider 
+                                  beforeImage={originalImage!} 
+                                  afterImage={currentImage} 
+                               />
+                               {/* Actions overlay */}
+                               <div className="absolute top-4 right-4 flex gap-2 z-20">
+                                  <button onClick={() => downloadImage(currentImage, `stylevision_${Date.now()}.png`)} className="bg-black/50 hover:bg-black/70 text-white p-2 rounded-full backdrop-blur transition-all">
+                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                                  </button>
+                               </div>
+                            </div>
+                         ) : (
+                            <div className="animate-pulse bg-neutral-900 w-full h-full flex items-center justify-center">
+                                <span className="text-neutral-700">Загрузка изображения...</span>
+                            </div>
+                         )}
+                         
+                         {/* Processing Overlay inside Image Area */}
+                         {isProcessing && (
+                             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-30 flex flex-col items-center justify-center text-center p-6 animate-fade-in">
+                                 <div className="w-16 h-16 border-4 border-amber-600 border-t-transparent rounded-full animate-spin mb-6"></div>
+                                 <p className="text-xl font-serif text-white mb-2">{processingMessage || 'Обработка...'}</p>
+                                 <p className="text-sm text-neutral-400">Это может занять 10-20 секунд</p>
+                             </div>
+                         )}
+                      </div>
+                      
+                      <ImageEditor 
                         originalImage={currentImage || originalImage!} 
                         onEdit={handleEdit} 
                         isProcessing={isProcessing} 
                      />
-                 </div>
-              </div>
 
-              {/* Right Column: Collection / Recommendations */}
-              <div className={`md:col-span-1 flex flex-col h-full overflow-hidden ${activeMobileTab === 'COLLECTION' ? 'block' : 'hidden md:flex'}`}>
-                 <div className="flex-grow overflow-y-auto space-y-4 pr-2 pb-24 md:pb-0 scrollbar-hide">
-                    <div className="mb-4">
-                        <h3 className="text-lg font-serif text-white">Рекомендации</h3>
-                        <p className="text-xs text-neutral-500">Нажмите на образ для примерки</p>
-                    </div>
-                    
-                    {recommendations.map(style => (
-                       <StyleCard 
-                          key={style.id}
-                          style={style}
-                          isSelected={selectedStyleId === style.id}
-                          onClick={() => setSelectedStyleId(style.id)}
-                          onApplyStyle={() => handleApplyStyle(style)}
-                          isGenerating={isProcessing && processingMessage.includes(style.title)}
-                          isProcessingGlobal={isProcessing}
-                          stores={stores}
-                       />
-                    ))}
-                    
-                    {recommendations.length === 0 && (
-                        <div className="text-center text-neutral-500 py-10 border border-neutral-800 rounded-xl bg-neutral-900/30">
-                            <p>Нет рекомендаций. Попробуйте изменить параметры анализа или перезагрузить страницу.</p>
-                        </div>
-                    )}
-                 </div>
+                      {/* Analysis Block (Restored) */}
+                      {analysis && (
+                          <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5 mt-6 animate-fade-in">
+                              <h3 className="text-lg font-serif text-white mb-3">Результаты Анализа</h3>
+                              <div className="flex flex-wrap gap-2 mb-4">
+                                  <span className="px-3 py-1 rounded-full bg-neutral-800 text-xs text-neutral-300 border border-neutral-700">Пол: {analysis.gender}</span>
+                                  <span className="px-3 py-1 rounded-full bg-neutral-800 text-xs text-neutral-300 border border-neutral-700">Фигура: {analysis.bodyType}</span>
+                                  <span className="px-3 py-1 rounded-full bg-neutral-800 text-xs text-neutral-300 border border-neutral-700">Цветотип: {analysis.seasonalColor}</span>
+                              </div>
+                              <p className="text-sm text-neutral-400 leading-relaxed mb-4">{analysis.detailedDescription}</p>
+                              <div className="flex flex-wrap gap-2">
+                                  {analysis.styleKeywords.map((kw, i) => (
+                                      <span key={i} className="text-[10px] uppercase font-bold text-amber-600 tracking-wider">#{kw}</span>
+                                  ))}
+                              </div>
+                          </div>
+                      )}
+                  </div>
+
+                  {/* Right Column: Recommendations */}
+                  <div className="space-y-6">
+                       <div className="flex items-center justify-between">
+                           <h3 className="font-serif text-2xl text-white">Рекомендации</h3>
+                           <span className="text-neutral-500 text-sm">{recommendations.length} образов</span>
+                       </div>
+                       
+                       <div className="grid grid-cols-1 gap-6">
+                           {recommendations.map(style => (
+                              <StyleCard 
+                                  key={style.id}
+                                  style={style}
+                                  isSelected={selectedStyleId === style.id}
+                                  onClick={() => setSelectedStyleId(style.id)}
+                                  onApplyStyle={() => handleApplyStyle(style)}
+                                  isGenerating={isProcessing && processingMessage.includes(style.title)}
+                                  isProcessingGlobal={isProcessing}
+                                  stores={stores}
+                               />
+                           ))}
+                           {recommendations.length === 0 && (
+                                <div className="text-center text-neutral-500 py-10 border border-neutral-800 rounded-xl bg-neutral-900/30">
+                                    <p>Нет рекомендаций. Попробуйте изменить параметры анализа или перезагрузить страницу.</p>
+                                </div>
+                           )}
+                       </div>
+                  </div>
               </div>
            </div>
         )}
@@ -1192,27 +1200,6 @@ const App: React.FC = () => {
             </div>
         </div>
       </footer>
-
-      {/* Mobile Bottom Navigation */}
-      {appState === AppState.RESULTS && (
-         <div className="fixed bottom-0 left-0 right-0 bg-[#0a0a0a] border-t border-neutral-800 flex md:hidden z-50 pb-safe">
-            <button 
-               onClick={() => setActiveMobileTab('STUDIO')}
-               className={`flex-1 py-4 flex flex-col items-center justify-center gap-1 ${activeMobileTab === 'STUDIO' ? 'text-amber-500' : 'text-neutral-500'}`}
-            >
-               <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-               <span className="text-[10px] uppercase font-bold tracking-wider">Студия</span>
-            </button>
-            <div className="w-px bg-neutral-800 h-full"></div>
-            <button 
-               onClick={() => setActiveMobileTab('COLLECTION')}
-               className={`flex-1 py-4 flex flex-col items-center justify-center gap-1 ${activeMobileTab === 'COLLECTION' ? 'text-amber-500' : 'text-neutral-500'}`}
-            >
-               <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
-               <span className="text-[10px] uppercase font-bold tracking-wider">Коллекция</span>
-            </button>
-         </div>
-      )}
     </div>
   );
 };
