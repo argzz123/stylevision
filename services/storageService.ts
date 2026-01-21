@@ -92,19 +92,23 @@ export const storageService = {
   saveUser: async (user: TelegramUser) => {
     try {
       // Prepare payload ensuring safe types
-      const payload = {
+      const payload: any = {
           id: user.id,
           first_name: user.first_name || '',
           last_name: user.last_name || '',
           username: user.username || '',
           photo_url: user.photo_url || '',
-          is_guest: user.isGuest === true, // Ensure boolean
-          terms_accepted_at: user.termsAcceptedAt || new Date().toISOString() // Ensure value exists
+          is_guest: user.isGuest === true, 
+          terms_accepted_at: user.termsAcceptedAt || new Date().toISOString()
       };
+      
+      if (user.subscriptionExpiresAt) {
+          payload.subscription_expires_at = user.subscriptionExpiresAt;
+      }
 
       const { error } = await supabase
         .from('users')
-        .upsert(payload, { onConflict: 'id' }); // Explicit conflict handling
+        .upsert(payload, { onConflict: 'id' });
 
       if (error) {
         console.error("Supabase Error:", error);
@@ -113,7 +117,6 @@ export const storageService = {
       
     } catch (e) {
       console.warn("Supabase saveUser failed, falling back to local:", e);
-      // Fallback save to LocalStorage
       localStorage.setItem(`${STORAGE_PREFIX}user_${user.id}`, JSON.stringify(user));
     }
   },
@@ -127,7 +130,7 @@ export const storageService = {
         .maybeSingle();
         
       if (error) throw error;
-      if (!data) return null; // Return null instead of throwing if simply not found
+      if (!data) return null;
 
       return {
           id: data.id,
@@ -136,27 +139,33 @@ export const storageService = {
           username: data.username,
           photo_url: data.photo_url,
           isGuest: data.is_guest,
-          termsAcceptedAt: data.terms_accepted_at
+          termsAcceptedAt: data.terms_accepted_at,
+          subscriptionExpiresAt: data.subscription_expires_at // Load subscription date
       };
     } catch (e) {
-      // Read from LocalStorage fallback
       const local = localStorage.getItem(`${STORAGE_PREFIX}user_${userId}`);
       return local ? JSON.parse(local) : null;
     }
   },
 
   // --- SUBSCRIPTION ---
-  setProStatus: async (userId: number, status: boolean) => {
+  setProStatus: async (userId: number, status: boolean, expiresAt?: string) => {
     try {
+       const updateData: any = { is_pro: status };
+       if (expiresAt) {
+           updateData.subscription_expires_at = expiresAt;
+       }
+
        const { error } = await supabase
         .from('users')
-        .update({ is_pro: status })
+        .update(updateData)
         .eq('id', userId);
         
        if (error) throw error;
     } catch (e) {
        console.warn("Supabase setPro failed:", e);
        localStorage.setItem(`${STORAGE_PREFIX}pro_${userId}`, String(status));
+       if (expiresAt) localStorage.setItem(`${STORAGE_PREFIX}pro_exp_${userId}`, expiresAt);
     }
   },
 
@@ -164,11 +173,14 @@ export const storageService = {
     try {
         const { data, error } = await supabase
             .from('users')
-            .select('is_pro')
+            .select('is_pro, subscription_expires_at')
             .eq('id', userId)
             .maybeSingle();
 
         if (error) throw error;
+        
+        // Logic: if is_pro is true, also check if expired (optional, but good practice)
+        // For now, we trust is_pro, but the app can do client-side validation using subscriptionExpiresAt from getUser
         return data?.is_pro || false;
     } catch (e) {
         return localStorage.getItem(`${STORAGE_PREFIX}pro_${userId}`) === 'true';
@@ -178,15 +190,11 @@ export const storageService = {
   // --- HISTORY & LIMITS ---
   saveHistoryItem: async (userId: number, item: HistoryItem) => {
     try {
-        // TASK 2: Architecture Fix - Upload to Storage first
-        // We ensure both are uploaded. Even if they fail and return null, it's better than saving 60MB base64.
         const [originalUrl, resultUrl] = await Promise.all([
             uploadImageToStorage(userId, item.originalImage, 'orig'),
             uploadImageToStorage(userId, item.resultImage, 'res')
         ]);
 
-        // CRITICAL CHECK: If we had a result image but failed to get a URL, fail the DB save.
-        // This triggers the catch block, which saves to localStorage (saving the user's data locally instead of losing it).
         if (item.resultImage && !resultUrl) {
             throw new Error("Failed to upload result image to cloud");
         }
@@ -222,7 +230,6 @@ export const storageService = {
         if (error) throw error;
     } catch (e) {
        console.error("Supabase History Delete Error:", e);
-       // Local Storage Fallback
        const key = `${STORAGE_PREFIX}history_${userId}`;
        const currentHistory = JSON.parse(localStorage.getItem(key) || '[]');
        const newHistory = currentHistory.filter((i: any) => i.id !== itemId);
@@ -232,7 +239,6 @@ export const storageService = {
 
   getHistory: async (userId: number): Promise<HistoryItem[]> => {
     try {
-        // TASK 1: Optimization - Explicit Column Selection
         const { data, error } = await supabase
             .from('history')
             .select('id, created_at, original_image, result_image, style_title, analysis, recommendations')
@@ -253,7 +259,6 @@ export const storageService = {
         }));
 
     } catch (e) {
-        // If DB fails, try local
         const data = localStorage.getItem(`${STORAGE_PREFIX}history_${userId}`);
         return data ? JSON.parse(data) : [];
     }
@@ -265,7 +270,6 @@ export const storageService = {
       date.setHours(date.getHours() - hours);
       const isoDate = date.toISOString();
 
-      // Optimize count query to simple head request
       const { count, error } = await supabase
         .from('history')
         .select('id', { count: 'exact', head: true })
@@ -281,7 +285,6 @@ export const storageService = {
   },
 
   // --- GLOBAL SYSTEM CONFIG ---
-  
   saveGlobalApiKey: async (apiKey: string) => {
       try {
           const { error } = await supabase
@@ -342,7 +345,7 @@ export const storageService = {
   getGlobalConfig: async (): Promise<GlobalConfig> => {
     const defaultConfig: GlobalConfig = {
         price: "1.00",
-        productTitle: "StyleVision PRO",
+        productTitle: "StyleVision AI+",
         productDescription: "Неограниченный доступ ко всем функциям",
         maintenanceMode: false
     };
@@ -370,7 +373,6 @@ export const storageService = {
   // --- ADMIN FUNCTIONS ---
   getAllUsers: async (): Promise<any[]> => {
      try {
-         // Optimized admin list select
          const { data, error } = await supabase
             .from('users')
             .select('id, first_name, last_name, username, photo_url, is_pro, is_guest')

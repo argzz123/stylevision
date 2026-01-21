@@ -92,16 +92,10 @@ const App: React.FC = () => {
 
     if (isTelegram) {
         // STRATEGY FOR TELEGRAM: Open Link Externally
-        // Telegram Mini Apps struggle with blob downloads, so we open the URL directly
-        // relying on the browser to handle the image view/save.
         if (dataUrl.startsWith('http')) {
              tg.openLink(dataUrl);
         } else {
-             // Fallback for Base64: Try to open in new system window or alert
-             // Usually Base64 is only present during Preview or Try-on before saving.
-             // If user saves to wardrobe, it becomes a URL.
              alert("Сохраните образ в гардероб, чтобы открыть полную версию.");
-             // window.open(dataUrl, '_blank'); // Often blocked in TG
         }
         return;
     }
@@ -157,15 +151,27 @@ const App: React.FC = () => {
         if (tg) {
             tg.ready();
             tg.expand();
-            // Force dark header color to match app
-            tg.setHeaderColor('#050505');
+            // FIX: Check version before setting header color to avoid errors on old clients
+            if (tg.isVersionAtLeast && tg.isVersionAtLeast('6.1')) {
+                tg.setHeaderColor('#050505');
+            }
             
             const tgUser = tg.initDataUnsafe?.user;
             if (tgUser) {
-                const fullUser = { ...tgUser, isGuest: false };
+                // Ensure we get latest data including subscription from DB
+                const dbUser = await storageService.getUser(tgUser.id);
+                
+                const fullUser: TelegramUser = { 
+                    ...tgUser, 
+                    isGuest: false,
+                    subscriptionExpiresAt: dbUser?.subscriptionExpiresAt
+                };
+                
                 setUser(fullUser);
                 localStorage.setItem('stylevision_current_user', JSON.stringify(fullUser));
-                await storageService.saveUser(fullUser);
+                
+                // Save/Update user data in BG
+                await storageService.saveUser(fullUser); 
                 await loadUserData(tgUser.id);
                 setIsAuthChecking(false);
                 return;
@@ -176,9 +182,13 @@ const App: React.FC = () => {
         if (storedUser) {
             try {
                 const parsedUser = JSON.parse(storedUser);
-                setUser(parsedUser);
-                await storageService.saveUser(parsedUser);
-                await loadUserData(parsedUser.id);
+                // Refresh user data from DB to get latest subscription status
+                const dbUser = await storageService.getUser(parsedUser.id);
+                const mergedUser = { ...parsedUser, ...dbUser };
+                
+                setUser(mergedUser);
+                await storageService.saveUser(mergedUser);
+                await loadUserData(mergedUser.id);
                 setIsAuthChecking(false);
                 return;
             } catch (e) {
@@ -221,8 +231,23 @@ const App: React.FC = () => {
         
         if (isPaid) {
             proStatus = true;
-            await storageService.setProStatus(userId, true);
-            alert("Оплата прошла успешно! AI+ режим активирован.");
+            
+            // Calculate Expiration Date (Now + 30 days)
+            const expiresAt = new Date();
+            expiresAt.setDate(expiresAt.getDate() + 30);
+            const expiresIso = expiresAt.toISOString();
+
+            // Update in DB
+            await storageService.setProStatus(userId, true, expiresIso);
+            
+            // Update Local State
+            if (user) {
+                const updatedUser = { ...user, subscriptionExpiresAt: expiresIso };
+                setUser(updatedUser);
+                localStorage.setItem('stylevision_current_user', JSON.stringify(updatedUser));
+            }
+
+            alert("Оплата прошла успешно! AI+ режим активирован на месяц.");
             setShowPaymentModal(false);
         }
         localStorage.removeItem('pending_payment_id');
@@ -333,7 +358,7 @@ const App: React.FC = () => {
         setIsProcessing(true);
         setProcessingMessage('Соединение с ЮKassa...');
         
-        const payment = await createPayment(globalConfig.price, globalConfig.productDescription || "Подписка StyleVision AI+");
+        const payment = await createPayment(globalConfig.price, globalConfig.productDescription || "Подписка StyleVision AI+ (1 месяц)");
         
         if (payment.confirmation && payment.confirmation.confirmation_url) {
             window.location.href = payment.confirmation.confirmation_url;
@@ -491,18 +516,30 @@ const App: React.FC = () => {
      localStorage.removeItem('stylevision_current_user');
      setAppState(AppState.UPLOAD);
      setHistory([]);
+     setShowProInfoModal(false); // Close modal if open
   };
 
   const handleGuestToLogin = () => {
       setShowGuestLockModal(false);
       handleLogout();
   };
+  
+  // Logic for clicking on Profile Button
+  const handleProfileClick = () => {
+      if (user?.isGuest) {
+          // If Guest -> Logout/Redirect to Login
+          handleLogout();
+      } else {
+          // If User -> Show Info Modal
+          setShowProInfoModal(true);
+      }
+  };
 
   // 1. Loading
   if (isAuthChecking) {
     return (
-        <div className="min-h-screen bg-[#050505] flex items-center justify-center">
-            <div className="animate-spin w-8 h-8 border-t-2 border-amber-500 rounded-full"></div>
+        <div className="min-h-screen bg-[#050505] text-neutral-300 font-sans flex flex-col pb-20 md:pb-12">
+            <div className="animate-spin w-8 h-8 border-t-2 border-amber-500 rounded-full mx-auto mt-[45vh]"></div>
         </div>
     );
   }
@@ -516,7 +553,6 @@ const App: React.FC = () => {
   if (globalConfig.maintenanceMode && !isAdmin(user.id)) {
       return (
           <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center p-6 text-center animate-fade-in">
-              {/* ... Maintenance UI ... */}
               <div className="w-24 h-24 bg-yellow-900/20 border border-yellow-600/50 rounded-full flex items-center justify-center mb-8">
                   <svg className="w-12 h-12 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
@@ -532,7 +568,7 @@ const App: React.FC = () => {
 
   // 4. Main UI
   return (
-    <div className="min-h-screen bg-[#050505] text-neutral-300 font-sans flex flex-col pb-20 md:pb-0">
+    <div className="min-h-screen bg-[#050505] text-neutral-300 font-sans flex flex-col relative pb-20 md:pb-12">
       
       {/* Banner */}
       <div className="bg-amber-600 text-black text-[10px] font-bold text-center py-1 tracking-[0.2em] uppercase sticky top-0 z-[60]">
@@ -543,14 +579,35 @@ const App: React.FC = () => {
       <header className="sticky top-[22px] z-50 backdrop-blur-md bg-black/80 border-b border-neutral-800">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           
-          {/* Logo / Home */}
-          <div className="flex items-center gap-3 cursor-pointer group" onClick={resetApp}>
-            <div className="w-8 h-8 border border-neutral-700 flex items-center justify-center bg-neutral-900">
-              <span className="font-serif text-xl text-amber-500">S</span>
-            </div>
-            <h1 className="text-xl font-serif text-white tracking-widest hidden md:block">
-              STYLE<span className="font-sans font-light text-neutral-500 text-sm ml-1">VISION</span>
-            </h1>
+          <div className="flex items-center gap-4">
+              {/* Logo / Home */}
+              <div className="flex items-center gap-3 cursor-pointer group" onClick={resetApp}>
+                <div className="w-8 h-8 border border-neutral-700 flex items-center justify-center bg-neutral-900">
+                  <span className="font-serif text-xl text-amber-500">S</span>
+                </div>
+                <h1 className="text-xl font-serif text-white tracking-widest hidden md:block">
+                  STYLE<span className="font-sans font-light text-neutral-500 text-sm ml-1">VISION</span>
+                </h1>
+              </div>
+
+              {/* SUBSCRIPTION BUTTON (MOVED TO LEFT) */}
+             {!isPro ? (
+                <button 
+                  onClick={handleBuyProClick}
+                  className="bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-black text-xs font-bold px-4 py-2 rounded-full transition-all shadow-lg shadow-amber-900/20 flex items-center gap-1.5"
+                >
+                    <span className="hidden sm:inline">Купить AI+</span>
+                    <span className="sm:hidden">AI+</span>
+                </button>
+             ) : (
+                <button 
+                  onClick={() => setShowProInfoModal(true)}
+                  className="border border-amber-500/50 bg-transparent hover:bg-amber-900/20 text-amber-500 text-xs font-bold px-4 py-2 rounded-full transition-all flex items-center gap-1.5"
+                >
+                    <span className="hidden sm:inline">AI+ Active</span>
+                    <span className="sm:hidden">AI+</span>
+                </button>
+             )}
           </div>
           
           <div className="flex items-center gap-4">
@@ -574,33 +631,15 @@ const App: React.FC = () => {
                 </button>
              )}
 
+             {/* PROFILE BUTTON - NOW USES handleProfileClick */}
              <div 
-                onClick={handleLogout}
-                className={`hidden md:flex cursor-pointer items-center gap-2 text-xs border border-neutral-800 rounded-full px-3 py-1 bg-neutral-900 hover:bg-red-900/10 hover:border-red-900/30 transition-all group ${user.isGuest ? 'text-neutral-500' : 'text-amber-500 border-amber-900/30'}`}
-                title="Нажмите чтобы выйти"
+                onClick={handleProfileClick}
+                className={`hidden md:flex cursor-pointer items-center gap-2 text-xs border border-neutral-800 rounded-full px-3 py-1 bg-neutral-900 hover:bg-neutral-800 transition-all group ${user.isGuest ? 'text-neutral-500 hover:border-red-900/30' : 'text-amber-500 border-amber-900/30 hover:border-amber-500'}`}
+                title={user.isGuest ? "Нажмите чтобы войти" : "Профиль"}
              >
                 <span className={`w-2 h-2 rounded-full ${user.isGuest ? 'bg-neutral-500' : 'bg-green-500'}`}></span>
                 {user.username || user.first_name}
              </div>
-
-             {/* SUBSCRIPTION BUTTON TOGGLE */}
-             {!isPro ? (
-                <button 
-                  onClick={handleBuyProClick}
-                  className="bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-black text-xs font-bold px-4 py-2 rounded-full transition-all shadow-lg shadow-amber-900/20 flex items-center gap-1.5"
-                >
-                    <span className="hidden sm:inline">Купить AI+</span>
-                    <span className="sm:hidden">AI+</span>
-                </button>
-             ) : (
-                <button 
-                  onClick={() => setShowProInfoModal(true)}
-                  className="border border-amber-500/50 bg-transparent hover:bg-amber-900/20 text-amber-500 text-xs font-bold px-4 py-2 rounded-full transition-all flex items-center gap-1.5"
-                >
-                    <span className="hidden sm:inline">AI+ Active</span>
-                    <span className="sm:hidden">AI+</span>
-                </button>
-             )}
              
              <button onClick={() => setShowHistory(true)} className="text-neutral-400 hover:text-white flex items-center gap-2">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>
@@ -615,35 +654,74 @@ const App: React.FC = () => {
          <AdminPanel onClose={() => setShowAdminPanel(false)} currentUserId={user.id} />
       )}
 
-      {/* SUBSCRIPTION INFO MODAL */}
+      {/* SUBSCRIPTION INFO MODAL (PROFILE INFO) */}
       {showProInfoModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in">
-             <div className="relative w-full max-w-sm bg-[#0a0a0a] border border-amber-500/30 rounded-2xl p-8 shadow-2xl shadow-amber-900/10 overflow-hidden text-center">
+             <div className="relative w-full max-w-sm bg-[#0a0a0a] border border-neutral-800 rounded-2xl p-8 shadow-2xl overflow-hidden text-center">
                 <button onClick={() => setShowProInfoModal(false)} className="absolute top-4 right-4 text-neutral-500 hover:text-white">
                     <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
                 
-                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-amber-900/20 border border-amber-500/50 flex items-center justify-center">
-                    <span className="text-2xl">✨</span>
+                {/* Profile Avatar Placeholder */}
+                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center overflow-hidden">
+                    {user.photo_url ? (
+                        <img src={user.photo_url} alt="Profile" className="w-full h-full object-cover" />
+                    ) : (
+                        <span className="text-2xl">👤</span>
+                    )}
                 </div>
                 
-                <h2 className="text-2xl font-serif text-white mb-2">AI+ Активирован</h2>
-                <p className="text-amber-500 text-sm font-bold tracking-widest uppercase mb-6">Ваша подписка активна</p>
+                <h2 className="text-xl font-bold text-white mb-1">{user.first_name}</h2>
+                <p className="text-xs text-neutral-500 mb-6">@{user.username || 'user'}</p>
+
+                {/* Status Section */}
+                {isPro ? (
+                    <div className="bg-amber-900/10 border border-amber-500/30 rounded-xl p-4 mb-6">
+                        <div className="flex items-center justify-center gap-2 mb-2">
+                           <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                           <h3 className="text-amber-500 font-bold uppercase tracking-widest text-xs">AI+ Активен</h3>
+                        </div>
+                        {user?.subscriptionExpiresAt && (
+                           <p className="text-neutral-400 text-xs">
+                              Действует до: <span className="text-white font-medium">{new Date(user.subscriptionExpiresAt).toLocaleDateString()}</span>
+                           </p>
+                        )}
+                    </div>
+                ) : (
+                    <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-4 mb-6">
+                         <h3 className="text-neutral-400 font-bold uppercase tracking-widest text-xs mb-2">Базовый аккаунт</h3>
+                         <p className="text-neutral-500 text-[10px] mb-3">Лимит генераций ограничен</p>
+                         <button 
+                            onClick={() => { setShowProInfoModal(false); handleBuyProClick(); }}
+                            className="w-full bg-amber-600 text-black font-bold py-2 rounded text-xs hover:bg-amber-500 transition-colors"
+                         >
+                            Купить AI+
+                         </button>
+                    </div>
+                )}
                 
-                <div className="bg-neutral-900/50 rounded-xl p-4 border border-neutral-800 mb-6 text-left space-y-3">
-                    <div className="flex items-center gap-3 text-sm text-neutral-300">
-                        <span className="text-green-500">✓</span> Безлимитная генерация
+                {/* Mobile Friendly Contact Links inside Modal */}
+                <div className="border-t border-neutral-800 pt-4 text-[10px] text-neutral-500 space-y-2 mb-4">
+                    <div className="flex justify-center gap-4">
+                       <a href="mailto:info@stylevision.fun" className="hover:text-amber-500 flex items-center gap-1">
+                          ✉️ info@stylevision.fun
+                       </a>
+                       <a href="https://t.me/Nikita_Peredvigin" target="_blank" rel="noopener noreferrer" className="hover:text-amber-500 flex items-center gap-1">
+                          ✈️ @Nikita_Peredvigin
+                       </a>
                     </div>
-                    <div className="flex items-center gap-3 text-sm text-neutral-300">
-                        <span className="text-green-500">✓</span> Приоритетная очередь
-                    </div>
-                    <div className="flex items-center gap-3 text-sm text-neutral-300">
-                        <span className="text-green-500">✓</span> Доступ к примерке
+                    <div className="flex justify-center gap-3">
+                       <a href="https://stylevision.fun/offer.html" target="_blank" className="hover:underline">Оферта</a>
+                       <a href="https://stylevision.fun/privacy.html" target="_blank" className="hover:underline">Конфиденциальность</a>
                     </div>
                 </div>
-                
-                <button onClick={() => setShowProInfoModal(false)} className="w-full bg-white text-black font-bold py-3 rounded-xl hover:bg-neutral-200 transition-colors">
-                    Отлично
+
+                {/* Logout Button */}
+                <button 
+                    onClick={handleLogout} 
+                    className="text-red-500 hover:text-red-400 text-xs font-bold uppercase tracking-wider border border-red-900/30 hover:border-red-600 px-4 py-2 rounded-full transition-all"
+                >
+                    Выйти из аккаунта
                 </button>
              </div>
         </div>
@@ -791,7 +869,7 @@ const App: React.FC = () => {
                             <span className="font-serif text-3xl text-amber-500 italic">S</span>
                         </div>
                     </div>
-                    <h2 className="text-2xl font-serif text-white mb-2">{globalConfig.productTitle || "StyleVision AI+"}</h2>
+                    <h2 className="text-2xl font-serif text-white mb-2">StyleVision AI+ (1 месяц)</h2>
                     
                     <div className="bg-neutral-900/50 rounded-xl p-4 border border-neutral-800 mb-6">
                         <div className="flex justify-between items-center mb-3 pb-3 border-b border-neutral-800">
@@ -803,7 +881,7 @@ const App: React.FC = () => {
                                <p className="whitespace-pre-line leading-relaxed">{globalConfig.productDescription}</p>
                            ) : (
                                <>
-                                <p>• Безлимитная генерация образов</p>
+                                <p>• Безлимитная генерация образов на 30 дней</p>
                                 <p>• Приоритетная обработка (без очереди)</p>
                                 <p>• Доступ к функции примерки (Virtual Try-On)</p>
                                 </>
@@ -823,10 +901,25 @@ const App: React.FC = () => {
                         )}
                     </button>
                     
-                    {/* Updated Legal Text with Link */}
+                    {/* Legal Text with Link */}
                     <p className="mt-4 text-[10px] text-neutral-500">
                        Нажимая кнопку, вы соглашаетесь с условиями <a href="https://stylevision.fun/offer.html" target="_blank" rel="noopener noreferrer" className="text-amber-600 hover:underline">публичной оферты</a>.
                     </p>
+
+                    {/* Mobile Contacts Section in Payment Modal */}
+                    <div className="mt-6 border-t border-neutral-800 pt-4 text-[10px] text-neutral-500 space-y-2">
+                         <div className="flex justify-center gap-4">
+                           <a href="mailto:info@stylevision.fun" className="hover:text-amber-500 flex items-center gap-1">
+                              ✉️ info@stylevision.fun
+                           </a>
+                           <a href="https://t.me/Nikita_Peredvigin" target="_blank" rel="noopener noreferrer" className="hover:text-amber-500 flex items-center gap-1">
+                              ✈️ @Nikita_Peredvigin
+                           </a>
+                        </div>
+                        <div className="flex justify-center gap-3">
+                           <a href="https://stylevision.fun/privacy.html" target="_blank" className="hover:underline">Конфиденциальность</a>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -964,7 +1057,7 @@ const App: React.FC = () => {
                                   <button onClick={() => handleModeChange('OBJECTIVE')} className={`p-3 border rounded text-xs uppercase tracking-wider transition-all ${analysisMode === 'OBJECTIVE' ? 'border-amber-600 bg-amber-900/10 text-white' : 'border-neutral-800 text-neutral-500 hover:border-neutral-600'}`}>
                                      ОБЪЕКТИВНЫЙ
                                   </button>
-                               </div>
+                                </div>
                                
                                {showObjectiveWarning && (
                                   <div className="bg-amber-900/20 border border-amber-700/30 p-3 rounded mb-4 animate-fade-in">
@@ -985,136 +1078,25 @@ const App: React.FC = () => {
            </div>
         )}
 
-        {/* Loading State */}
-        {appState === AppState.ANALYZING && (
-          <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-6">
-            <div className="w-16 h-16 border-t-2 border-amber-500 rounded-full animate-spin"></div>
-            <p className="text-white font-serif animate-pulse text-center px-4 max-w-md">{processingMessage}</p>
+        {/* Desktop Footer (Fixed at bottom) */}
+        <footer className="hidden md:block fixed bottom-0 left-0 right-0 z-40 bg-[#050505]/90 backdrop-blur border-t border-neutral-900 py-3 text-center text-[10px] text-neutral-600">
+          <div className="max-w-7xl mx-auto px-4 flex justify-between items-center">
+              <div className="flex gap-6">
+                  <a href="mailto:info@stylevision.fun" className="hover:text-amber-600 flex items-center gap-1 transition-colors">
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                      info@stylevision.fun
+                  </a>
+                  <a href="https://t.me/Nikita_Peredvigin" target="_blank" rel="noopener noreferrer" className="hover:text-amber-600 flex items-center gap-1 transition-colors">
+                      <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+                      @Nikita_Peredvigin
+                  </a>
+              </div>
+              <div className="flex gap-4">
+                  <a href="https://stylevision.fun/offer.html" target="_blank" className="hover:text-amber-500 transition-colors">Оферта</a>
+                  <a href="https://stylevision.fun/privacy.html" target="_blank" className="hover:text-amber-500 transition-colors">Конфиденциальность</a>
+              </div>
           </div>
-        )}
-
-        {/* RESULTS: Split View for Desktop, Tabs for Mobile */}
-        {appState === AppState.RESULTS && analysis && (
-          <div className="animate-fade-in-up">
-            {/* Mobile Tab Content */}
-            <div className="md:grid md:grid-cols-12 md:gap-8">
-               
-               {/* Left/Main Column: Image Studio */}
-               <div className={`md:col-span-5 ${activeMobileTab === 'STUDIO' ? 'block' : 'hidden md:block'}`}>
-                  
-                  {/* Image Container */}
-                  <div className="relative bg-black aspect-[3/4] border border-neutral-800 overflow-hidden group rounded-lg mb-4">
-                     {currentImage && (
-                        <BeforeAfterSlider 
-                           beforeImage={originalImage || ''} 
-                           afterImage={currentImage} 
-                        />
-                     )}
-                     
-                     {isProcessing && (
-                        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-30 flex flex-col items-center justify-center p-4 text-center">
-                           <div className="animate-spin w-8 h-8 border-t-2 border-white rounded-full mb-3"></div>
-                           <span className="text-xs text-white tracking-widest uppercase">{processingMessage}</span>
-                        </div>
-                     )}
-                  </div>
-
-                  {/* Add Save/Copy Button Here */}
-                  {currentImage && (
-                      <button 
-                        onClick={() => downloadImage(currentImage, `stylevision_look_${Date.now()}.png`)}
-                        className="w-full bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-white font-medium py-3 rounded-lg flex items-center justify-center gap-2 mb-4 transition-colors"
-                      >
-                         <svg className="w-5 h-5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                         </svg>
-                         Скачать
-                      </button>
-                  )}
-
-                  {/* Restored Simple Editor Controls */}
-                  <div className="bg-neutral-900 border border-neutral-800 border-t-0 p-5 rounded-b-lg mb-4 rounded-t-lg">
-                     <div className="flex items-center justify-between mb-3">
-                        <span className="text-[10px] text-amber-600 font-bold uppercase tracking-widest">AI Редактор</span>
-                        {currentImage !== originalImage && !isProcessing && (
-                           <button onClick={() => {setCurrentImage(originalImage); setEditPrompt('');}} className="text-xs text-neutral-500 hover:text-white underline decoration-dotted">
-                              Сбросить
-                           </button>
-                        )}
-                     </div>
-                     <form onSubmit={handleEdit} className="relative">
-                        <input 
-                           type="text" 
-                           value={editPrompt}
-                           onChange={e => setEditPrompt(e.target.value)}
-                           placeholder="Что изменить? (например: надень шляпу)"
-                           disabled={isProcessing}
-                           className="w-full bg-black border border-neutral-700 rounded py-3 pl-3 pr-10 text-sm text-white focus:border-amber-500 focus:outline-none placeholder-neutral-600 transition-colors"
-                        />
-                        <button type="submit" disabled={isProcessing || !editPrompt} className="absolute right-2 top-2 p-1 text-amber-500 disabled:opacity-30 hover:text-amber-400 transition-colors">
-                           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                        </button>
-                     </form>
-                  </div>
-
-                  {/* Analysis Info */}
-                  <div className="p-5 border border-neutral-800 bg-neutral-900/30 rounded-lg">
-                     <h3 className="text-xs font-bold text-neutral-500 uppercase tracking-widest mb-3">Детали Анализа</h3>
-                     <p className="text-sm text-neutral-300 font-light leading-relaxed mb-4">{analysis.detailedDescription}</p>
-                     
-                     <div className="grid grid-cols-2 gap-4 border-t border-neutral-800 pt-3">
-                        <div>
-                           <span className="text-[10px] text-neutral-600 uppercase block mb-1">Тип фигуры</span>
-                           <span className="text-sm text-white">{analysis.bodyType}</span>
-                        </div>
-                        <div>
-                           <span className="text-[10px] text-neutral-600 uppercase block mb-1">Цветотип</span>
-                           <span className="text-sm text-white">{analysis.seasonalColor}</span>
-                        </div>
-                     </div>
-                  </div>
-               </div>
-
-               {/* Right/Second Column: Collection */}
-               <div className={`md:col-span-7 pb-40 md:pb-0 ${activeMobileTab === 'COLLECTION' ? 'block' : 'hidden md:block'}`}>
-                  <div className="mb-6 flex justify-between items-end">
-                     <div>
-                        <span className="text-amber-500 text-xs font-bold uppercase tracking-widest">Коллекция</span>
-                        <h2 className="text-2xl md:text-3xl font-serif text-white">Рекомендации</h2>
-                     </div>
-                     <div className="hidden md:block">
-                        <span className="text-xs text-neutral-500">
-                           {recommendations.length} образов подобрано
-                        </span>
-                     </div>
-                  </div>
-                  
-                  {recommendations.length > 0 ? (
-                     <div className="grid grid-cols-1 gap-6">
-                        {recommendations.map(style => (
-                           <StyleCard 
-                              key={style.id} 
-                              style={style} 
-                              isSelected={selectedStyleId === style.id}
-                              onClick={() => setSelectedStyleId(style.id)}
-                              onApplyStyle={() => handleApplyStyle(style)}
-                              isGenerating={isProcessing && selectedStyleId === style.id}
-                              stores={stores}
-                              isProcessingGlobal={isProcessing}
-                           />
-                        ))}
-                     </div>
-                  ) : (
-                     <div className="p-8 text-center border border-neutral-800 rounded bg-neutral-900/50">
-                        <p className="text-neutral-500">Нет рекомендаций для отображения.</p>
-                     </div>
-                  )}
-               </div>
-
-            </div>
-          </div>
-        )}
-      </main>
+        </footer>
 
       {/* Mobile Bottom Navigation */}
       {appState === AppState.RESULTS && (

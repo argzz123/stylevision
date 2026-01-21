@@ -85,4 +85,5 @@ export interface TelegramUser {
   photo_url?: string;
   isGuest?: boolean;
   termsAcceptedAt?: string; // ISO Date string of when terms were accepted
+  subscriptionExpiresAt?: string; // ISO Date string for subscription expiration
 }
