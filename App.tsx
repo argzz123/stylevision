@@ -241,14 +241,18 @@ const App: React.FC = () => {
             // Update in DB
             await storageService.setProStatus(userId, true, expiresIso);
             
-            // Update Local State
+            // Update Local State with new date
             if (user) {
-                const updatedUser = { ...user, subscriptionExpiresAt: expiresIso };
+                const updatedUser = { 
+                    ...user, 
+                    subscriptionExpiresAt: expiresIso,
+                    // If fetching from DB fails later (no column), we at least have it in state now
+                };
                 setUser(updatedUser);
                 localStorage.setItem('stylevision_current_user', JSON.stringify(updatedUser));
             }
 
-            alert("Оплата прошла успешно! AI+ режим активирован на месяц.");
+            alert(`Оплата прошла успешно! AI+ режим активирован до ${new Date(expiresIso).toLocaleDateString()}`);
             setShowPaymentModal(false);
         }
         localStorage.removeItem('pending_payment_id');
@@ -566,7 +570,7 @@ const App: React.FC = () => {
 
   // 4. Main UI
   return (
-    <div className="min-h-screen bg-[#050505] text-neutral-300 font-sans flex flex-col relative pb-20 md:pb-12">
+    <div className="min-h-screen bg-[#050505] text-neutral-300 font-sans flex flex-col relative pb-20 md:pb-12 overflow-x-hidden">
       
       {/* Banner */}
       <div className="bg-amber-600 text-black text-[10px] font-bold text-center py-1 tracking-[0.2em] uppercase sticky top-0 z-[60]">
@@ -1018,8 +1022,8 @@ const App: React.FC = () => {
                          </div>
 
                          <div className="space-y-6">
-                            {/* Restored Store Logo Grid */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
+                            {/* Restored Store Logo Grid - Removed custom-scrollbar class */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[350px] overflow-y-auto pr-2">
                                {stores.map(store => (
                                   <div 
                                     key={store.id}
@@ -1076,6 +1080,19 @@ const App: React.FC = () => {
            </div>
         )}
 
+        {/* Analyzing State - RESTORED */}
+        {appState === AppState.ANALYZING && (
+          <div className="flex flex-col items-center justify-center min-h-[60vh] animate-fade-in text-center px-4">
+             <div className="w-24 h-24 border-4 border-neutral-800 border-t-amber-600 rounded-full animate-spin mb-8"></div>
+             <h2 className="text-2xl md:text-3xl font-serif text-white mb-4 animate-pulse">
+               {processingMessage || 'Анализируем фото...'}
+             </h2>
+             <p className="text-neutral-500 max-w-md mx-auto leading-relaxed">
+               Искусственный интеллект изучает особенности вашей внешности, чтобы подобрать идеальный стиль.
+             </p>
+          </div>
+        )}
+
         {/* Results State - RESTORED */}
         {appState === AppState.RESULTS && (
            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[calc(100vh-140px)] animate-fade-in">
@@ -1113,7 +1130,7 @@ const App: React.FC = () => {
                      )}
                  </div>
                  
-                 {/* Editor Controls */}
+                 {/* Editor Controls - Simplified */}
                  <div className="mt-4">
                      <ImageEditor 
                         originalImage={currentImage || originalImage!} 
@@ -1125,7 +1142,7 @@ const App: React.FC = () => {
 
               {/* Right Column: Collection / Recommendations */}
               <div className={`md:col-span-1 flex flex-col h-full overflow-hidden ${activeMobileTab === 'COLLECTION' ? 'block' : 'hidden md:flex'}`}>
-                 <div className="flex-grow overflow-y-auto space-y-4 pr-2 custom-scrollbar pb-24 md:pb-0">
+                 <div className="flex-grow overflow-y-auto space-y-4 pr-2 pb-24 md:pb-0">
                     <div className="mb-4">
                         <h3 className="text-lg font-serif text-white">Рекомендации</h3>
                         <p className="text-xs text-neutral-500">Нажмите на образ для примерки</p>
