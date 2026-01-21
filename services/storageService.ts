@@ -13,31 +13,53 @@ export interface GlobalConfig {
     maintenanceMode: boolean;
 }
 
-// Helper: Convert Base64 to Blob for upload
-const base64ToBlob = (base64: string): Blob => {
-  const parts = base64.split(';base64,');
-  const contentType = parts[0].split(':')[1];
-  const raw = window.atob(parts[1]);
-  const rawLength = raw.length;
-  const uInt8Array = new Uint8Array(rawLength);
+// Helper: Robustly Convert Base64 to Blob for upload
+const base64ToBlob = (base64: string): Blob | null => {
+  try {
+      // Check if it's actually base64 with header
+      if (!base64.includes('base64,')) {
+          return null; 
+      }
 
-  for (let i = 0; i < rawLength; ++i) {
-    uInt8Array[i] = raw.charCodeAt(i);
+      const arr = base64.split(',');
+      const mimeMatch = arr[0].match(/:(.*?);/);
+      const mime = mimeMatch ? mimeMatch[1] : 'image/png';
+      const bstr = atob(arr[1]);
+      let n = bstr.length;
+      const u8arr = new Uint8Array(n);
+      
+      while (n--) {
+          u8arr[n] = bstr.charCodeAt(n);
+      }
+      
+      return new Blob([u8arr], { type: mime });
+  } catch (e) {
+      console.error("Blob conversion failed", e);
+      return null;
   }
-
-  return new Blob([uInt8Array], { type: contentType });
 };
 
 // Helper: Upload image to Supabase Storage and get URL
 const uploadImageToStorage = async (userId: number, base64Image: string | null, type: 'orig' | 'res'): Promise<string | null> => {
-    if (!base64Image || !base64Image.startsWith('data:')) {
-        return base64Image; // Already a URL or null
+    // 1. If it's already a URL (starts with http) or null, return as is
+    if (!base64Image || base64Image.startsWith('http')) {
+        return base64Image; 
+    }
+
+    // 2. Validate it is a data URL
+    if (!base64Image.startsWith('data:')) {
+        // If it's not a URL and not a data URI, it might be raw base64 or garbage. Return null to avoid DB bloat.
+        console.warn(`Invalid image format for ${type}, skipping upload.`);
+        return null; 
     }
 
     try {
         const blob = base64ToBlob(base64Image);
-        // Create unique filename: user_{id}/{timestamp}_{type}.png
-        const filename = `user_${userId}/${Date.now()}_${type}.png`;
+        if (!blob) throw new Error("Failed to create blob from base64");
+
+        // Create unique filename: user_{id}/{timestamp}_{random}_{type}.png
+        const fileExt = blob.type.split('/')[1] || 'png';
+        const filename = `user_${userId}/${Date.now()}_${Math.floor(Math.random() * 1000)}_${type}.${fileExt}`;
 
         const { error: uploadError } = await supabase.storage
             .from('images') // Bucket name
@@ -54,8 +76,12 @@ const uploadImageToStorage = async (userId: number, base64Image: string | null, 
 
         return data.publicUrl;
     } catch (e) {
-        console.error("Storage Upload Error:", e);
-        return base64Image; // Fallback: save Base64 string if upload fails (so we don't lose data)
+        console.error(`Storage Upload Error (${type}):`, e);
+        // CRITICAL FIX: If upload fails, DO NOT return the huge Base64 string.
+        // Return null or the error causes a missing image, but saves the DB from 60MB payloads.
+        // Or re-throw if we want to fail the save completely.
+        // Let's return null to keep the app working fast, image will just be broken in history rather than crashing the app.
+        return null; 
     }
 };
 
@@ -152,7 +178,7 @@ export const storageService = {
   saveHistoryItem: async (userId: number, item: HistoryItem) => {
     try {
         // TASK 2: Architecture Fix - Upload to Storage first
-        // We do this concurrently to save time
+        // We ensure both are uploaded. Even if they fail and return null, it's better than saving 60MB base64.
         const [originalUrl, resultUrl] = await Promise.all([
             uploadImageToStorage(userId, item.originalImage, 'orig'),
             uploadImageToStorage(userId, item.resultImage, 'res')
@@ -162,8 +188,8 @@ export const storageService = {
             .from('history')
             .insert({
                 user_id: userId,
-                original_image: originalUrl, // Now a short URL (or base64 fallback)
-                result_image: resultUrl,     // Now a short URL (or base64 fallback)
+                original_image: originalUrl || '', // Save empty string if upload failed, not Base64
+                result_image: resultUrl || '',     // Save empty string if upload failed, not Base64
                 style_title: item.styleTitle,
                 analysis: item.analysis,
                 recommendations: item.recommendations
@@ -187,7 +213,6 @@ export const storageService = {
             .eq('user_id', userId);
             
         if (error) throw error;
-        // Note: Ideally we should also delete from Storage bucket, but it's optional for now
     } catch (e) {
        console.error("Supabase History Delete Error:", e);
        // Local Storage Fallback
@@ -201,8 +226,6 @@ export const storageService = {
   getHistory: async (userId: number): Promise<HistoryItem[]> => {
     try {
         // TASK 1: Optimization - Explicit Column Selection
-        // Only fetch columns we actually need. Since we now use URLs (mostly), this is fast.
-        // Even if old records are Base64, explicit selection is better than '*'
         const { data, error } = await supabase
             .from('history')
             .select('id, created_at, original_image, result_image, style_title, analysis, recommendations')
