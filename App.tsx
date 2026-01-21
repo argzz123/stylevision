@@ -83,23 +83,37 @@ const App: React.FC = () => {
   // Helper: Is Admin?
   const isAdmin = (id: number) => ADMIN_IDS.includes(id);
 
-  // Helper: Download Image (Force Download instead of Copy)
+  // Helper: Download Image (Robust)
   const downloadImage = async (dataUrl: string, filename: string) => {
-    // Universal Download Logic for Web and basic Mobile usage
-    // For Telegram WebApp, creating an anchor tag usually triggers the browser's download behavior
-    // or opens the image in a new tab where the user can long-press to save.
-    
     try {
-       const link = document.createElement('a');
-       link.href = dataUrl;
-       link.download = filename;
-       link.target = '_blank'; // Important for Telegram WebApp to handle it correctly
-       document.body.appendChild(link);
-       link.click();
-       document.body.removeChild(link);
+       // 1. If it's Base64, simple download
+       if (dataUrl.startsWith('data:')) {
+           const link = document.createElement('a');
+           link.href = dataUrl;
+           link.download = filename;
+           document.body.appendChild(link);
+           link.click();
+           document.body.removeChild(link);
+       } else {
+           // 2. If it's a URL (e.g. Supabase), fetch as blob to force download
+           // This prevents the browser from just opening the image in a new tab
+           const response = await fetch(dataUrl);
+           const blob = await response.blob();
+           const blobUrl = window.URL.createObjectURL(blob);
+           
+           const link = document.createElement('a');
+           link.href = blobUrl;
+           link.download = filename;
+           document.body.appendChild(link);
+           link.click();
+           document.body.removeChild(link);
+           
+           window.URL.revokeObjectURL(blobUrl);
+       }
     } catch (e) {
        console.error("Download failed:", e);
-       alert("Не удалось скачать файл автоматически. Попробуйте открыть его в браузере.");
+       // Fallback: Open in new tab if blob fetching fails
+       window.open(dataUrl, '_blank');
     }
   };
 

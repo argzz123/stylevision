@@ -16,14 +16,20 @@ export interface GlobalConfig {
 // Helper: Robustly Convert Base64 to Blob for upload
 const base64ToBlob = (base64: string): Blob | null => {
   try {
+      // Clean whitespace
+      const cleaned = base64.trim();
+
       // Check if it's actually base64 with header
-      if (!base64.includes('base64,')) {
+      if (!cleaned.startsWith('data:')) {
           return null; 
       }
 
-      const arr = base64.split(',');
+      const arr = cleaned.split(',');
+      if (arr.length < 2) return null;
+
       const mimeMatch = arr[0].match(/:(.*?);/);
       const mime = mimeMatch ? mimeMatch[1] : 'image/png';
+      
       const bstr = atob(arr[1]);
       let n = bstr.length;
       const u8arr = new Uint8Array(n);
@@ -48,7 +54,6 @@ const uploadImageToStorage = async (userId: number, base64Image: string | null, 
 
     // 2. Validate it is a data URL
     if (!base64Image.startsWith('data:')) {
-        // If it's not a URL and not a data URI, it might be raw base64 or garbage. Return null to avoid DB bloat.
         console.warn(`Invalid image format for ${type}, skipping upload.`);
         return null; 
     }
@@ -65,7 +70,7 @@ const uploadImageToStorage = async (userId: number, base64Image: string | null, 
             .from('images') // Bucket name
             .upload(filename, blob, {
                 cacheControl: '3600',
-                upsert: false
+                upsert: true
             });
 
         if (uploadError) throw uploadError;
@@ -77,10 +82,6 @@ const uploadImageToStorage = async (userId: number, base64Image: string | null, 
         return data.publicUrl;
     } catch (e) {
         console.error(`Storage Upload Error (${type}):`, e);
-        // CRITICAL FIX: If upload fails, DO NOT return the huge Base64 string.
-        // Return null or the error causes a missing image, but saves the DB from 60MB payloads.
-        // Or re-throw if we want to fail the save completely.
-        // Let's return null to keep the app working fast, image will just be broken in history rather than crashing the app.
         return null; 
     }
 };
@@ -184,12 +185,18 @@ export const storageService = {
             uploadImageToStorage(userId, item.resultImage, 'res')
         ]);
 
+        // CRITICAL CHECK: If we had a result image but failed to get a URL, fail the DB save.
+        // This triggers the catch block, which saves to localStorage (saving the user's data locally instead of losing it).
+        if (item.resultImage && !resultUrl) {
+            throw new Error("Failed to upload result image to cloud");
+        }
+
         const { error } = await supabase
             .from('history')
             .insert({
                 user_id: userId,
-                original_image: originalUrl || '', // Save empty string if upload failed, not Base64
-                result_image: resultUrl || '',     // Save empty string if upload failed, not Base64
+                original_image: originalUrl || '', 
+                result_image: resultUrl || '',     
                 style_title: item.styleTitle,
                 analysis: item.analysis,
                 recommendations: item.recommendations
@@ -197,7 +204,7 @@ export const storageService = {
             
         if (error) throw error;
     } catch (e) {
-       console.error("Supabase History Save Error:", e);
+       console.error("Supabase History Save Error (Fallback to Local):", e);
        const currentHistory = JSON.parse(localStorage.getItem(`${STORAGE_PREFIX}history_${userId}`) || '[]');
        const newHistory = [item, ...currentHistory].slice(0, 20);
        localStorage.setItem(`${STORAGE_PREFIX}history_${userId}`, JSON.stringify(newHistory));
@@ -246,6 +253,7 @@ export const storageService = {
         }));
 
     } catch (e) {
+        // If DB fails, try local
         const data = localStorage.getItem(`${STORAGE_PREFIX}history_${userId}`);
         return data ? JSON.parse(data) : [];
     }
