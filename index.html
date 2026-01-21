@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ru">
   <head>
@@ -45,19 +46,13 @@
         background-color: #d97706;
       }
       
-      /* Custom Scrollbar for store list */
-      ::-webkit-scrollbar {
-        width: 6px;
+      /* Hide Scrollbar but allow scrolling */
+      .scrollbar-hide {
+          -ms-overflow-style: none;  /* IE and Edge */
+          scrollbar-width: none;  /* Firefox */
       }
-      ::-webkit-scrollbar-track {
-        background: #0a0a0a;
-      }
-      ::-webkit-scrollbar-thumb {
-        background: #333;
-        border-radius: 3px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #555;
+      .scrollbar-hide::-webkit-scrollbar {
+          display: none;
       }
     </style>
   <script type="importmap">

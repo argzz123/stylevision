@@ -798,7 +798,7 @@ const App: React.FC = () => {
       {showHistory && (
          <div className="fixed inset-0 z-[60] flex justify-end">
             <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowHistory(false)}></div>
-            <div className="relative w-full max-w-md bg-[#0a0a0a] border-l border-neutral-800 h-full overflow-y-auto p-6 animate-fade-in shadow-2xl">
+            <div className="relative w-full max-w-md bg-[#0a0a0a] border-l border-neutral-800 h-full overflow-y-auto p-6 animate-fade-in shadow-2xl scrollbar-hide">
                <div className="flex justify-between items-center mb-8">
                   <h2 className="font-serif text-2xl text-white">Ваш Гардероб</h2>
                   <button onClick={() => setShowHistory(false)} className="p-2"><svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
@@ -1023,7 +1023,7 @@ const App: React.FC = () => {
 
                          <div className="space-y-6">
                             {/* Restored Store Logo Grid - Removed custom-scrollbar class */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[350px] overflow-y-auto pr-2">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[350px] overflow-y-auto pr-2 scrollbar-hide">
                                {stores.map(store => (
                                   <div 
                                     key={store.id}
@@ -1142,7 +1142,7 @@ const App: React.FC = () => {
 
               {/* Right Column: Collection / Recommendations */}
               <div className={`md:col-span-1 flex flex-col h-full overflow-hidden ${activeMobileTab === 'COLLECTION' ? 'block' : 'hidden md:flex'}`}>
-                 <div className="flex-grow overflow-y-auto space-y-4 pr-2 pb-24 md:pb-0">
+                 <div className="flex-grow overflow-y-auto space-y-4 pr-2 pb-24 md:pb-0 scrollbar-hide">
                     <div className="mb-4">
                         <h3 className="text-lg font-serif text-white">Рекомендации</h3>
                         <p className="text-xs text-neutral-500">Нажмите на образ для примерки</p>
