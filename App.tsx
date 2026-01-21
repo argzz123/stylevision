@@ -7,7 +7,8 @@ import { AppState, UserAnalysis, StyleRecommendation, AnalysisMode, Store, Seaso
 import StyleCard from './components/StyleCard';
 import BeforeAfterSlider from './components/BeforeAfterSlider';
 import LoginScreen from './components/LoginScreen';
-import AdminPanel from './components/AdminPanel'; 
+import AdminPanel from './components/AdminPanel';
+import ImageEditor from './components/ImageEditor';
 
 // ADMIN ID CONSTANT (Array)
 const ADMIN_IDS = [643780299, 1613288376];
@@ -468,9 +469,8 @@ const App: React.FC = () => {
     }
   };
 
-  const handleEdit = async (e: React.FormEvent) => {
-     e.preventDefault();
-     if (!currentImage || !editPrompt.trim()) return;
+  const handleEdit = async (prompt: string, mask?: string) => {
+     if (!currentImage || !prompt.trim()) return;
 
      if (user?.isGuest) {
          setShowGuestLockModal(true);
@@ -485,15 +485,13 @@ const App: React.FC = () => {
         setProcessingMessage('Редактируем фото...');
         const newImage = await editUserImage(
             currentImage, 
-            editPrompt,
-            undefined,
+            prompt,
+            mask,
             (msg) => setProcessingMessage(msg)
         );
         setCurrentImage(newImage);
         
-        saveToHistory(newImage, "Edit: " + editPrompt);
-        
-        setEditPrompt('');
+        saveToHistory(newImage, "Edit: " + prompt);
      } catch (err: any) {
         console.error(err);
         alert(err.message);
@@ -1078,25 +1076,105 @@ const App: React.FC = () => {
            </div>
         )}
 
-        {/* Desktop Footer (Fixed at bottom) */}
-        <footer className="hidden md:block fixed bottom-0 left-0 right-0 z-40 bg-[#050505]/90 backdrop-blur border-t border-neutral-900 py-3 text-center text-[10px] text-neutral-600">
-          <div className="max-w-7xl mx-auto px-4 flex justify-between items-center">
-              <div className="flex gap-6">
-                  <a href="mailto:info@stylevision.fun" className="hover:text-amber-600 flex items-center gap-1 transition-colors">
-                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
-                      info@stylevision.fun
-                  </a>
-                  <a href="https://t.me/Nikita_Peredvigin" target="_blank" rel="noopener noreferrer" className="hover:text-amber-600 flex items-center gap-1 transition-colors">
-                      <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
-                      @Nikita_Peredvigin
-                  </a>
+        {/* Results State - RESTORED */}
+        {appState === AppState.RESULTS && (
+           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[calc(100vh-140px)] animate-fade-in">
+              
+              {/* Left Column: Image Area (Studio) */}
+              <div className={`md:col-span-2 flex flex-col h-full ${activeMobileTab === 'STUDIO' ? 'block' : 'hidden md:flex'}`}>
+                 <div className="flex-grow bg-black relative rounded-xl overflow-hidden border border-neutral-800 flex items-center justify-center">
+                    {/* Main Image Display */}
+                     {currentImage ? (
+                        <div className="relative w-full h-full">
+                           <BeforeAfterSlider 
+                              beforeImage={originalImage!} 
+                              afterImage={currentImage} 
+                           />
+                           {/* Actions overlay */}
+                           <div className="absolute top-4 right-4 flex gap-2 z-20">
+                              <button onClick={() => downloadImage(currentImage, `stylevision_${Date.now()}.png`)} className="bg-black/50 hover:bg-black/70 text-white p-2 rounded-full backdrop-blur transition-all">
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                              </button>
+                           </div>
+                        </div>
+                     ) : (
+                        <div className="animate-pulse bg-neutral-900 w-full h-full flex items-center justify-center">
+                            <span className="text-neutral-700">Загрузка изображения...</span>
+                        </div>
+                     )}
+                     
+                     {/* Processing Overlay inside Image Area */}
+                     {isProcessing && (
+                         <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-30 flex flex-col items-center justify-center text-center p-6 animate-fade-in">
+                             <div className="w-16 h-16 border-4 border-amber-600 border-t-transparent rounded-full animate-spin mb-6"></div>
+                             <p className="text-xl font-serif text-white mb-2">{processingMessage || 'Обработка...'}</p>
+                             <p className="text-sm text-neutral-400">Это может занять 10-20 секунд</p>
+                         </div>
+                     )}
+                 </div>
+                 
+                 {/* Editor Controls */}
+                 <div className="mt-4">
+                     <ImageEditor 
+                        originalImage={currentImage || originalImage!} 
+                        onEdit={handleEdit} 
+                        isProcessing={isProcessing} 
+                     />
+                 </div>
               </div>
-              <div className="flex gap-4">
-                  <a href="https://stylevision.fun/offer.html" target="_blank" className="hover:text-amber-500 transition-colors">Оферта</a>
-                  <a href="https://stylevision.fun/privacy.html" target="_blank" className="hover:text-amber-500 transition-colors">Конфиденциальность</a>
+
+              {/* Right Column: Collection / Recommendations */}
+              <div className={`md:col-span-1 flex flex-col h-full overflow-hidden ${activeMobileTab === 'COLLECTION' ? 'block' : 'hidden md:flex'}`}>
+                 <div className="flex-grow overflow-y-auto space-y-4 pr-2 custom-scrollbar pb-24 md:pb-0">
+                    <div className="mb-4">
+                        <h3 className="text-lg font-serif text-white">Рекомендации</h3>
+                        <p className="text-xs text-neutral-500">Нажмите на образ для примерки</p>
+                    </div>
+                    
+                    {recommendations.map(style => (
+                       <StyleCard 
+                          key={style.id}
+                          style={style}
+                          isSelected={selectedStyleId === style.id}
+                          onClick={() => setSelectedStyleId(style.id)}
+                          onApplyStyle={() => handleApplyStyle(style)}
+                          isGenerating={isProcessing && processingMessage.includes(style.title)}
+                          isProcessingGlobal={isProcessing}
+                          stores={stores}
+                       />
+                    ))}
+                    
+                    {recommendations.length === 0 && (
+                        <div className="text-center text-neutral-500 py-10 border border-neutral-800 rounded-xl bg-neutral-900/30">
+                            <p>Нет рекомендаций. Попробуйте изменить параметры анализа или перезагрузить страницу.</p>
+                        </div>
+                    )}
+                 </div>
               </div>
-          </div>
-        </footer>
+           </div>
+        )}
+
+      </main>
+
+      {/* Desktop Footer (Fixed at bottom) */}
+      <footer className="hidden md:block fixed bottom-0 left-0 right-0 z-40 bg-[#050505]/90 backdrop-blur border-t border-neutral-900 py-3 text-center text-[10px] text-neutral-600">
+        <div className="max-w-7xl mx-auto px-4 flex justify-between items-center">
+            <div className="flex gap-6">
+                <a href="mailto:info@stylevision.fun" className="hover:text-amber-600 flex items-center gap-1 transition-colors">
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                    info@stylevision.fun
+                </a>
+                <a href="https://t.me/Nikita_Peredvigin" target="_blank" rel="noopener noreferrer" className="hover:text-amber-600 flex items-center gap-1 transition-colors">
+                    <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+                    @Nikita_Peredvigin
+                </a>
+            </div>
+            <div className="flex gap-4">
+                <a href="https://stylevision.fun/offer.html" target="_blank" className="hover:text-amber-500 transition-colors">Оферта</a>
+                <a href="https://stylevision.fun/privacy.html" target="_blank" className="hover:text-amber-500 transition-colors">Конфиденциальность</a>
+            </div>
+        </div>
+      </footer>
 
       {/* Mobile Bottom Navigation */}
       {appState === AppState.RESULTS && (
