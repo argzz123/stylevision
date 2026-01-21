@@ -10,30 +10,83 @@ export interface GlobalConfig {
     price: string;
     productTitle: string;
     productDescription: string;
-    maintenanceMode: boolean; // New field
+    maintenanceMode: boolean;
 }
+
+// Helper: Convert Base64 to Blob for upload
+const base64ToBlob = (base64: string): Blob => {
+  const parts = base64.split(';base64,');
+  const contentType = parts[0].split(':')[1];
+  const raw = window.atob(parts[1]);
+  const rawLength = raw.length;
+  const uInt8Array = new Uint8Array(rawLength);
+
+  for (let i = 0; i < rawLength; ++i) {
+    uInt8Array[i] = raw.charCodeAt(i);
+  }
+
+  return new Blob([uInt8Array], { type: contentType });
+};
+
+// Helper: Upload image to Supabase Storage and get URL
+const uploadImageToStorage = async (userId: number, base64Image: string | null, type: 'orig' | 'res'): Promise<string | null> => {
+    if (!base64Image || !base64Image.startsWith('data:')) {
+        return base64Image; // Already a URL or null
+    }
+
+    try {
+        const blob = base64ToBlob(base64Image);
+        // Create unique filename: user_{id}/{timestamp}_{type}.png
+        const filename = `user_${userId}/${Date.now()}_${type}.png`;
+
+        const { error: uploadError } = await supabase.storage
+            .from('images') // Bucket name
+            .upload(filename, blob, {
+                cacheControl: '3600',
+                upsert: false
+            });
+
+        if (uploadError) throw uploadError;
+
+        const { data } = supabase.storage
+            .from('images')
+            .getPublicUrl(filename);
+
+        return data.publicUrl;
+    } catch (e) {
+        console.error("Storage Upload Error:", e);
+        return base64Image; // Fallback: save Base64 string if upload fails (so we don't lose data)
+    }
+};
 
 export const storageService = {
   
   // --- USER PROFILE ---
   saveUser: async (user: TelegramUser) => {
     try {
+      // Prepare payload ensuring safe types
+      const payload = {
+          id: user.id,
+          first_name: user.first_name || '',
+          last_name: user.last_name || '',
+          username: user.username || '',
+          photo_url: user.photo_url || '',
+          is_guest: user.isGuest === true, // Ensure boolean
+          terms_accepted_at: user.termsAcceptedAt || new Date().toISOString() // Ensure value exists
+      };
+
       const { error } = await supabase
         .from('users')
-        .upsert({
-          id: user.id,
-          first_name: user.first_name,
-          last_name: user.last_name,
-          username: user.username,
-          photo_url: user.photo_url,
-          is_guest: user.isGuest || false,
-          terms_accepted_at: user.termsAcceptedAt // Persist legal consent
-        });
+        .upsert(payload, { onConflict: 'id' }); // Explicit conflict handling
 
-      if (error) throw error;
+      if (error) {
+        console.error("Supabase Error:", error);
+        throw error;
+      }
       
     } catch (e) {
       console.warn("Supabase saveUser failed, falling back to local:", e);
+      // Fallback save to LocalStorage
       localStorage.setItem(`${STORAGE_PREFIX}user_${user.id}`, JSON.stringify(user));
     }
   },
@@ -47,7 +100,7 @@ export const storageService = {
         .maybeSingle();
         
       if (error) throw error;
-      if (!data) throw new Error("User not found");
+      if (!data) return null; // Return null instead of throwing if simply not found
 
       return {
           id: data.id,
@@ -59,6 +112,7 @@ export const storageService = {
           termsAcceptedAt: data.terms_accepted_at
       };
     } catch (e) {
+      // Read from LocalStorage fallback
       const local = localStorage.getItem(`${STORAGE_PREFIX}user_${userId}`);
       return local ? JSON.parse(local) : null;
     }
@@ -97,12 +151,19 @@ export const storageService = {
   // --- HISTORY & LIMITS ---
   saveHistoryItem: async (userId: number, item: HistoryItem) => {
     try {
+        // TASK 2: Architecture Fix - Upload to Storage first
+        // We do this concurrently to save time
+        const [originalUrl, resultUrl] = await Promise.all([
+            uploadImageToStorage(userId, item.originalImage, 'orig'),
+            uploadImageToStorage(userId, item.resultImage, 'res')
+        ]);
+
         const { error } = await supabase
             .from('history')
             .insert({
                 user_id: userId,
-                original_image: item.originalImage,
-                result_image: item.resultImage,
+                original_image: originalUrl, // Now a short URL (or base64 fallback)
+                result_image: resultUrl,     // Now a short URL (or base64 fallback)
                 style_title: item.styleTitle,
                 analysis: item.analysis,
                 recommendations: item.recommendations
@@ -126,6 +187,7 @@ export const storageService = {
             .eq('user_id', userId);
             
         if (error) throw error;
+        // Note: Ideally we should also delete from Storage bucket, but it's optional for now
     } catch (e) {
        console.error("Supabase History Delete Error:", e);
        // Local Storage Fallback
@@ -138,9 +200,12 @@ export const storageService = {
 
   getHistory: async (userId: number): Promise<HistoryItem[]> => {
     try {
+        // TASK 1: Optimization - Explicit Column Selection
+        // Only fetch columns we actually need. Since we now use URLs (mostly), this is fast.
+        // Even if old records are Base64, explicit selection is better than '*'
         const { data, error } = await supabase
             .from('history')
-            .select('*')
+            .select('id, created_at, original_image, result_image, style_title, analysis, recommendations')
             .eq('user_id', userId)
             .order('created_at', { ascending: false })
             .limit(20);
@@ -169,9 +234,10 @@ export const storageService = {
       date.setHours(date.getHours() - hours);
       const isoDate = date.toISOString();
 
+      // Optimize count query to simple head request
       const { count, error } = await supabase
         .from('history')
-        .select('*', { count: 'exact', head: true })
+        .select('id', { count: 'exact', head: true })
         .eq('user_id', userId)
         .gte('created_at', isoDate);
 
@@ -184,9 +250,6 @@ export const storageService = {
   },
 
   // --- GLOBAL SYSTEM CONFIG ---
-  // We use the System User (ID -100) to store global configs.
-  // first_name = API Key
-  // last_name = JSON string of other configs (Price, Description, Maintenance)
   
   saveGlobalApiKey: async (apiKey: string) => {
       try {
@@ -225,15 +288,14 @@ export const storageService = {
 
   saveGlobalConfig: async (config: GlobalConfig) => {
     try {
-        // Need to fetch existing first_name (API Key) to not overwrite it
         const currentKey = await storageService.getGlobalApiKey();
         
         const { error } = await supabase
           .from('users')
           .upsert({
                id: SYSTEM_USER_ID,
-               first_name: currentKey || '', // Preserve key
-               last_name: JSON.stringify(config), // Store config in last_name
+               first_name: currentKey || '', 
+               last_name: JSON.stringify(config), 
                username: 'SYSTEM_CONFIG',
                is_guest: true
           });
@@ -277,9 +339,10 @@ export const storageService = {
   // --- ADMIN FUNCTIONS ---
   getAllUsers: async (): Promise<any[]> => {
      try {
+         // Optimized admin list select
          const { data, error } = await supabase
             .from('users')
-            .select('*')
+            .select('id, first_name, last_name, username, photo_url, is_pro, is_guest')
             .neq('id', SYSTEM_USER_ID)
             .order('created_at', { ascending: false })
             .limit(50);

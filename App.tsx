@@ -361,15 +361,24 @@ const App: React.FC = () => {
       setIsProcessing(true);
       setProcessingMessage('Анализируем ваш профиль...');
       
-      const analysisResult = await analyzeUserImage(originalImage!, analysisMode);
+      const analysisResult = await analyzeUserImage(
+          originalImage!, 
+          analysisMode,
+          (msg) => setProcessingMessage(msg) // Callback for queue updates
+      );
       setAnalysis(analysisResult);
       
       setProcessingMessage(`Ищем образы (${selectedSeason === 'ANY' ? 'база' : selectedSeason})...`);
       
-      const styles = await getStyleRecommendations(analysisResult, stores, {
-        season: selectedSeason,
-        occasion: selectedOccasion
-      });
+      const styles = await getStyleRecommendations(
+          analysisResult, 
+          stores, 
+          {
+            season: selectedSeason,
+            occasion: selectedOccasion
+          },
+          (msg) => setProcessingMessage(msg) // Callback for queue updates
+      );
       setRecommendations(styles);
       if (styles.length > 0) setSelectedStyleId(styles[0].id);
       
@@ -377,8 +386,8 @@ const App: React.FC = () => {
       setAppState(AppState.RESULTS);
     } catch (error: any) {
       console.error(error);
-      // SHOW REAL ERROR MESSAGE TO USER
-      alert(error.message || 'Ошибка анализа.');
+      // SHOW REAL ERROR MESSAGE TO USER (Now beautified by mapFriendlyError)
+      alert(error.message);
       setAppState(AppState.UPLOAD);
     } finally {
       setIsProcessing(false);
@@ -423,15 +432,20 @@ const App: React.FC = () => {
         2. QUALITY: 8k resolution, photorealistic.
       `;
       
-      const newImage = await editUserImage(originalImage, prompt);
+      const newImage = await editUserImage(
+          originalImage, 
+          prompt, 
+          undefined,
+          (msg) => setProcessingMessage(msg) // Callback for queue updates
+      );
       setCurrentImage(newImage);
       
       // Saving runs in background
       saveToHistory(newImage, safeTitle);
 
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      alert('Не удалось примерить стиль.');
+      alert(error.message);
     } finally {
       setIsProcessing(false);
     }
@@ -454,16 +468,21 @@ const App: React.FC = () => {
      try {
         setIsProcessing(true);
         setProcessingMessage('Редактируем фото...');
-        const newImage = await editUserImage(currentImage, editPrompt);
+        const newImage = await editUserImage(
+            currentImage, 
+            editPrompt,
+            undefined,
+            (msg) => setProcessingMessage(msg) // Callback for queue updates
+        );
         setCurrentImage(newImage);
         
         // Background save
         saveToHistory(newImage, "Edit: " + editPrompt);
         
         setEditPrompt('');
-     } catch (err) {
+     } catch (err: any) {
         console.error(err);
-        alert("Ошибка редактирования");
+        alert(err.message);
      } finally {
         setIsProcessing(false);
      }
@@ -949,7 +968,7 @@ const App: React.FC = () => {
         {appState === AppState.ANALYZING && (
           <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-6">
             <div className="w-16 h-16 border-t-2 border-amber-500 rounded-full animate-spin"></div>
-            <p className="text-white font-serif animate-pulse">{processingMessage}</p>
+            <p className="text-white font-serif animate-pulse text-center px-4 max-w-md">{processingMessage}</p>
           </div>
         )}
 
@@ -972,7 +991,7 @@ const App: React.FC = () => {
                      )}
                      
                      {isProcessing && (
-                        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-30 flex flex-col items-center justify-center">
+                        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-30 flex flex-col items-center justify-center p-4 text-center">
                            <div className="animate-spin w-8 h-8 border-t-2 border-white rounded-full mb-3"></div>
                            <span className="text-xs text-white tracking-widest uppercase">{processingMessage}</span>
                         </div>

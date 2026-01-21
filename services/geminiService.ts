@@ -57,6 +57,33 @@ const parseJSON = (text: string) => {
 };
 
 /**
+ * ERROR MAPPING UTILITY
+ * Translates technical errors into stylish user-friendly messages
+ */
+const mapFriendlyError = (error: any): Error => {
+    const msg = (error.message || '').toLowerCase();
+    
+    if (msg.includes('overloaded') || msg.includes('503')) {
+        return new Error("Высокая нагрузка. Мы попытались встать в очередь, но время ожидания слишком велико. Попробуйте через минуту.");
+    }
+    if (msg.includes('safety') || msg.includes('blocked')) {
+        return new Error("ИИ посчитал изображение или запрос небезопасным (NSFW/Safety Filter). Попробуйте другое фото.");
+    }
+    if (msg.includes('quota') || msg.includes('429')) {
+        return new Error("Превышен лимит запросов к API. Подождите немного.");
+    }
+    if (msg.includes('network') || msg.includes('fetch')) {
+        return new Error("Проблема с интернет-соединением. Проверьте сеть.");
+    }
+    if (msg.includes('no human') || msg.includes('на фото не найден')) {
+        return new Error("На фото не найден человек. Загрузите четкое фото в полный рост или портрет.");
+    }
+    
+    // Default Fallback
+    return new Error("Упс! ИИ задумался и не выдал результат. Попробуйте еще раз.");
+};
+
+/**
  * SECURE API KEY ACCESS
  */
 export const getOrFetchApiKey = async (): Promise<string> => {
@@ -87,55 +114,98 @@ const SAFETY_SETTINGS = [
 ];
 
 /**
- * PROXY HELPER
- * Sends data to our Vercel /api/gemini-proxy endpoint.
- * This ensures the request comes from Vercel's IP (US/EU), bypassing user location blocks.
+ * RETRY LOGIC & PROXY HELPER
  */
-const callGeminiProxy = async (model: string, contents: any, generationConfig?: any, tools?: any) => {
+const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+const callGeminiProxy = async (
+    model: string, 
+    contents: any, 
+    generationConfig?: any, 
+    tools?: any,
+    onStatusUpdate?: (msg: string) => void
+) => {
     const apiKey = await getOrFetchApiKey();
     
-    // Construct the payload as the REST API expects it
     const payload = {
         contents: contents,
         safetySettings: SAFETY_SETTINGS,
         generationConfig: generationConfig || {},
     };
 
-    // Add tools if present (Google Search, etc)
     if (tools) {
         (payload as any).tools = tools;
     }
 
-    // UPDATED: Use absolute URL for Vercel Backend
-    const response = await fetch('https://stylevision.vercel.app/api/gemini-proxy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            apiKey,
-            model,
-            data: payload
-        })
-    });
+    // Increase retries significantly for 503s
+    const MAX_RETRIES = 6;
+    let attempt = 0;
 
-    if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error?.message || err.error || 'Proxy Error');
+    while (attempt < MAX_RETRIES) {
+        try {
+            const response = await fetch('https://stylevision.vercel.app/api/gemini-proxy', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    apiKey,
+                    model,
+                    data: payload
+                })
+            });
+
+            if (!response.ok) {
+                const err = await response.json();
+                const errMsg = err.error?.message || err.error || 'Proxy Error';
+                throw new Error(errMsg);
+            }
+
+            const result = await response.json();
+            const text = result.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join('') || '';
+            
+            return {
+                text,
+                candidates: result.candidates
+            };
+
+        } catch (error: any) {
+            attempt++;
+            const isOverloaded = error.message?.toLowerCase().includes('overloaded') || error.message?.includes('503');
+
+            if (isOverloaded && attempt < MAX_RETRIES) {
+                // AUTO RETRY LOGIC - NO THROW
+                const waitTime = attempt * 5; // 5s, 10s, 15s...
+                
+                if (onStatusUpdate) {
+                    onStatusUpdate(`Сервер загружен. Вы в очереди... (Попытка ${attempt}/${MAX_RETRIES}). Ожидание ~${waitTime}с`);
+                }
+                
+                // Exponential backoff
+                await wait(waitTime * 1000);
+                continue; // Retry loop
+            }
+
+            // If it's the last attempt or a non-retriable error, throw it
+            if (attempt === MAX_RETRIES) {
+                throw error;
+            }
+            
+            // For other non-fatal errors (network blips), retry quickly once
+            if (!isOverloaded && attempt < 2) {
+                 await wait(1000);
+                 continue;
+            }
+            
+            throw error;
+        }
     }
-
-    const result = await response.json();
-    
-    // Extract text from standard REST response structure
-    // candidates[0].content.parts[0].text
-    const text = result.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join('') || '';
-    
-    // Return an object mimicking the SDK response for compatibility
-    return {
-        text,
-        candidates: result.candidates
-    };
+    throw new Error("Connection failed after retries");
 };
 
-export const analyzeUserImage = async (base64Image: string, mode: AnalysisMode = 'STANDARD'): Promise<UserAnalysis> => {
+export const analyzeUserImage = async (
+    base64Image: string, 
+    mode: AnalysisMode = 'STANDARD',
+    onStatusUpdate?: (msg: string) => void
+): Promise<UserAnalysis> => {
   if (IS_DEMO_MODE) {
     await new Promise(resolve => setTimeout(resolve, 2000));
     return {
@@ -149,30 +219,35 @@ export const analyzeUserImage = async (base64Image: string, mode: AnalysisMode =
 
   let promptInstructions = "";
   if (mode === 'OBJECTIVE') {
-    // SAFE OBJECTIVE PROMPT: Focuses on geometry and balance, avoiding judgmental terms.
     promptInstructions = `
-      ROLE: Technical Image Consultant.
-      MODE: OBJECTIVE, ANALYTICAL, GEOMETRIC.
-      TASK: Analyze body geometry, vertical proportions, and color contrast.
-      GUIDELINES: 
-      1. Use neutral, anatomical terminology (e.g., "soft lines", "structured shoulders", "balanced proportions").
-      2. Avoid negative labels (never use "fat", "short", "bad", "problem").
-      3. Focus on maximizing aesthetic balance using composition rules.
-      TONE: Professional, factual, dry, respectful (Russian language).
+      MODE: OBJECTIVE, TECHNICAL.
+      TASK: Analyze body geometry and visual characteristics accurately.
+      TONE: Professional, neutral, respectful (Russian language).
     `;
   } else {
     promptInstructions = `
-      ROLE: Personal Luxury Shopper.
-      MODE: STANDARD, ENHANCING.
-      TASK: Identify body type, season, and suggest enhancing styles.
-      TONE: Inspiring, helpful, complimentary (Russian language).
+      MODE: ENHANCING, STYLISTIC.
+      TASK: Identify features to create the best style recommendations.
+      TONE: Inspiring, helpful (Russian language).
     `;
   }
 
   const prompt = `
-    Analyze this photo.
+    Analyze this image carefully.
+    
+    STEP 1: CHECK FOR HUMAN.
+    Is there a clear person in this photo (full body, half body, or selfie)?
+    If NO human is found, return JSON: { "error": "NO_HUMAN" }.
+    
+    STEP 2: IF HUMAN IS FOUND, ANALYZE.
     ${promptInstructions}
-    Return JSON: gender, bodyType, seasonalColor, styleKeywords (array), detailedDescription.
+    
+    Return JSON with fields: 
+    - gender (Male/Female/Unisex string in Russian)
+    - bodyType (String in Russian)
+    - seasonalColor (String in Russian)
+    - styleKeywords (Array of 5 strings)
+    - detailedDescription (Short paragraph in Russian describing the person)
   `;
 
   try {
@@ -184,34 +259,44 @@ export const analyzeUserImage = async (base64Image: string, mode: AnalysisMode =
     };
 
     const generationConfig = {
-        responseMimeType: "application/json",
-        responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-                gender: { type: Type.STRING },
-                bodyType: { type: Type.STRING },
-                seasonalColor: { type: Type.STRING },
-                styleKeywords: { type: Type.ARRAY, items: { type: Type.STRING } },
-                detailedDescription: { type: Type.STRING }
-            },
-            required: ["gender", "bodyType", "seasonalColor", "styleKeywords", "detailedDescription"]
-        }
+        responseMimeType: "application/json"
     };
 
-    const response = await callGeminiProxy('gemini-3-flash-preview', contents, generationConfig);
+    const response = await callGeminiProxy(
+        'gemini-3-flash-preview', 
+        contents, 
+        generationConfig, 
+        undefined, 
+        onStatusUpdate
+    );
 
-    if (response.text) return parseJSON(response.text) as UserAnalysis;
+    if (response.text) {
+        const result = parseJSON(response.text);
+        
+        if (result.error === 'NO_HUMAN' || result.error === 'no_human') {
+            throw new Error("На фото не найден человек");
+        }
+        
+        return {
+            gender: result.gender || "Унисекс",
+            bodyType: result.bodyType || "Стандартный",
+            seasonalColor: result.seasonalColor || "Контрастный",
+            styleKeywords: result.styleKeywords || ["Кэжуал", "Стиль"],
+            detailedDescription: result.detailedDescription || "Анализ завершен успешно."
+        };
+    }
     throw new Error(`Пустой ответ от ИИ.`);
   } catch (error: any) {
     console.error("Gemini Analyze Error:", error);
-    throw new Error(`Ошибка AI: ${error.message || error.toString()}`);
+    throw mapFriendlyError(error);
   }
 };
 
 export const getStyleRecommendations = async (
   analysis: UserAnalysis, 
   stores: Store[],
-  preferences: StylePreferences
+  preferences: StylePreferences,
+  onStatusUpdate?: (msg: string) => void
 ): Promise<StyleRecommendation[]> => {
 
   if (IS_DEMO_MODE) {
@@ -220,8 +305,7 @@ export const getStyleRecommendations = async (
   }
 
   const activeStores = stores.filter(s => s.isSelected);
-  const siteOperators = activeStores.length > 0 ? activeStores.map(s => `site:${s.domain}`).join(' OR ') : '';
-  const storeInstruction = siteOperators ? `SEARCH INSTRUCTIONS: Search ONLY within these domains: ${activeStores.map(s => s.name).join(', ')} using query operator "(${siteOperators})".` : '';
+  const storeNames = activeStores.length > 0 ? activeStores.map(s => s.name).join(', ') : 'Popular Fashion Stores';
   
   const schema: Schema = {
     type: Type.ARRAY,
@@ -250,7 +334,6 @@ export const getStyleRecommendations = async (
     }
   };
 
-  // Internal function to make the call
   const attemptGeneration = async (prompt: string) => {
       const response = await callGeminiProxy(
           'gemini-3-flash-preview', 
@@ -259,44 +342,56 @@ export const getStyleRecommendations = async (
               responseMimeType: "application/json",
               responseSchema: schema
           },
-          [{ googleSearch: {} }] // tools
+          [{ googleSearch: {} }],
+          onStatusUpdate 
       );
       if (response.text) return parseJSON(response.text) as StyleRecommendation[];
       throw new Error("No style data returned");
   };
 
   try {
-      // 1. First Attempt: Context Aware
-      // We purposefully do NOT pass the full raw "detailedDescription" if it is potentially unsafe.
-      // Instead, we pass the key structural params and a sanitized instruction.
       const prompt = `
-        ROLE: World-Class Fashion Stylist.
-        CLIENT PROFILE: ${analysis.gender}, ${analysis.bodyType}, ${analysis.seasonalColor}.
-        CONTEXT: Season ${preferences.season}, Occasion ${preferences.occasion}.
-        STYLE KEYWORDS: ${analysis.styleKeywords.join(', ')}.
-        ${storeInstruction}
-        TASK: Create 4 DISTINCT, COMPLETE "TOTAL LOOKS".
-        RULES: 5-8 items per look. Must include Accessories.
-        IMPORTANT: Provide a creative 'title' for each look in Russian.
+        ROLE: Professional AI Stylist.
+        CLIENT: ${analysis.gender}, ${analysis.bodyType}, ${analysis.seasonalColor}.
+        REQUEST: Create 4 stylish TOTAL LOOKS for Season: ${preferences.season}, Occasion: ${preferences.occasion}.
+        
+        CRITICAL INSTRUCTION:
+        - You MUST return 4 distinct looks.
+        - If exact matches are hard to find, suggest generally available items fitting the style.
+        - Target Stores: ${storeNames} (preferred but not limited to).
+        - Language: Russian.
+        
+        OUTPUT FORMAT: JSON Array matching the schema exactly.
+        Generate IDs as 'style_1', 'style_2' etc.
       `;
       return await attemptGeneration(prompt);
 
   } catch (error: any) {
-      console.warn("Primary generation failed (likely safety block), attempting fallback...");
+      console.warn("Primary generation failed, using fallback...", error);
       
       try {
-          // 2. Fallback Attempt: Simplified Context
+          if (onStatusUpdate) onStatusUpdate("Уточняем детали стиля (повторная генерация)...");
+          
           const safePrompt = `
-            ROLE: Fashion Stylist.
-            TASK: Suggest 4 complete outfits for ${analysis.gender}.
-            CONTEXT: Season ${preferences.season}, Occasion ${preferences.occasion}.
-            ${storeInstruction}
-            RULES: Return JSON matching schema. Russian language.
+            Task: Create 4 generic fashion outfits for ${analysis.gender} suitable for ${preferences.occasion}.
+            Language: Russian.
+            Return JSON Array matching schema.
+            Do not use search tools, just use your fashion knowledge.
           `;
-          return await attemptGeneration(safePrompt);
+          
+          const response = await callGeminiProxy(
+            'gemini-3-flash-preview',
+            { parts: [{ text: safePrompt }] },
+            { responseMimeType: "application/json", responseSchema: schema },
+            undefined,
+            onStatusUpdate
+          );
+          
+          if (response.text) return parseJSON(response.text) as StyleRecommendation[];
+          throw new Error("Fallback failed");
+
       } catch (retryError: any) {
-          console.error("Fallback generation failed:", retryError);
-          throw new Error(`Не удалось подобрать образы. Попробуйте изменить сезон или событие.`);
+          throw mapFriendlyError(retryError);
       }
   }
 };
@@ -305,16 +400,16 @@ export const findShoppingProducts = async (itemQuery: string): Promise<ShoppingP
   if (IS_DEMO_MODE) return [];
 
   const prompt = `
-    TASK: Fast Product Search. QUERY: "${itemQuery}". MARKET: Russia.
-    Identify 3 POPULAR, REAL product options. Return JSON: title, price, store, imageUrl.
+    TASK: Find 3 real products for "${itemQuery}" in Russia.
+    Return JSON: title, price, store, imageUrl.
   `;
 
   try {
       const response = await callGeminiProxy(
           'gemini-3-flash-preview',
           { parts: [{ text: prompt }] },
-          {}, // config
-          [{ googleSearch: {} }] // tools
+          {}, 
+          [{ googleSearch: {} }]
       );
 
       if (response.text) {
@@ -327,7 +422,12 @@ export const findShoppingProducts = async (itemQuery: string): Promise<ShoppingP
   }
 };
 
-export const editUserImage = async (base64Image: string, textPrompt: string, maskImage?: string): Promise<string> => {
+export const editUserImage = async (
+    base64Image: string, 
+    textPrompt: string, 
+    maskImage?: string,
+    onStatusUpdate?: (msg: string) => void
+): Promise<string> => {
   if (IS_DEMO_MODE) return base64Image;
 
   const model = 'gemini-2.5-flash-image';
@@ -345,11 +445,12 @@ export const editUserImage = async (base64Image: string, textPrompt: string, mas
   try {
     const response = await callGeminiProxy(
         model,
-        { parts: parts }
+        { parts: parts },
+        undefined,
+        undefined,
+        onStatusUpdate
     );
 
-    // Parse image from response candidates
-    // REST API returns image bytes in inlineData
     for (const candidate of response.candidates || []) {
         for (const part of candidate.content.parts || []) {
             if (part.inlineData) {
@@ -360,6 +461,6 @@ export const editUserImage = async (base64Image: string, textPrompt: string, mas
     throw new Error("No image data in response");
   } catch (error: any) {
     console.error("Gemini Image Edit Error:", error);
-    throw new Error(`Ошибка редактора: ${error.message}`);
+    throw mapFriendlyError(error);
   }
 };

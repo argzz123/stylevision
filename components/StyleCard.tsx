@@ -7,8 +7,8 @@ interface StyleCardProps {
   isSelected: boolean;
   onClick: () => void;
   onApplyStyle: () => void;
-  isGenerating: boolean; // Spinner state for this specific card
-  isProcessingGlobal?: boolean; // Global processing state to disable clicks
+  isGenerating: boolean; 
+  isProcessingGlobal?: boolean; 
   stores: Store[]; 
 }
 
@@ -23,24 +23,16 @@ const StyleCard: React.FC<StyleCardProps> = ({
 }) => {
   
   const handleItemClick = (itemName: string) => {
-    // 1. Get active stores selected by user
     const activeStores = stores.filter(s => s.isSelected);
-    
-    // 2. Pick a random store from selection, or default to general search
     let searchDomain = '';
-    let storeName = '';
     
     if (activeStores.length > 0) {
         const randomStore = activeStores[Math.floor(Math.random() * activeStores.length)];
         searchDomain = `site:${randomStore.domain} `;
-        storeName = randomStore.name;
     }
 
-    // 3. Construct Query
     const query = `${searchDomain}${itemName} купить`;
     const url = `https://www.google.com/search?q=${encodeURIComponent(query)}&tbm=isch`; 
-
-    // 4. Open
     window.open(url, '_blank');
   };
 
@@ -52,21 +44,20 @@ const StyleCard: React.FC<StyleCardProps> = ({
       onClick={!isProcessingGlobal ? onClick : undefined}
       className={`
         rounded-xl border p-4 md:p-6 relative flex flex-col h-auto
-        transition-colors duration-200
+        transform-gpu transition-all duration-300 ease-out
         ${isSelected 
-          ? 'bg-[#121212] border-amber-500/80 shadow-[0_4px_20px_rgba(245,158,11,0.15)] z-10' 
-          : 'bg-[#0f0f0f]/80 border-neutral-800 hover:border-neutral-700 hover:bg-[#151515] opacity-90 z-0'}
+          ? 'bg-[#121212] border-amber-500/80 shadow-[0_4px_20px_rgba(245,158,11,0.15)] z-10 scale-[1.01]' 
+          : 'bg-[#0f0f0f]/80 border-neutral-800 hover:border-neutral-700 hover:bg-[#151515] opacity-90 z-0 active:scale-[0.98]'}
         ${isProcessingGlobal && !isSelected ? 'opacity-50 cursor-not-allowed grayscale' : 'cursor-pointer'}
       `}
     >
       <div className="flex justify-between items-start mb-3">
-        <h3 className={`text-xl md:text-2xl font-serif tracking-wide ${isSelected ? 'text-amber-500' : 'text-neutral-300'}`}>
+        <h3 className={`text-xl md:text-2xl font-serif tracking-wide transition-colors ${isSelected ? 'text-amber-500' : 'text-neutral-300'}`}>
           {safeTitle}
         </h3>
       </div>
       
-      {/* Remove line-clamp when selected so full description is visible */}
-      <p className={`text-neutral-400 text-xs md:text-sm mb-4 leading-relaxed font-light ${isSelected ? '' : 'line-clamp-2'}`}>
+      <p className={`text-neutral-400 text-xs md:text-sm mb-4 leading-relaxed font-light transition-all ${isSelected ? '' : 'line-clamp-2'}`}>
         {safeDescription}
       </p>
       
@@ -90,7 +81,7 @@ const StyleCard: React.FC<StyleCardProps> = ({
                   e.stopPropagation();
                   handleItemClick(item.name);
                 }}
-                className="w-full text-left flex items-center justify-between p-3 rounded bg-neutral-900/50 border border-neutral-800 hover:bg-neutral-800 hover:border-neutral-600 transition-all group/item"
+                className="w-full text-left flex items-center justify-between p-3 rounded bg-neutral-900/50 border border-neutral-800 hover:bg-neutral-800 hover:border-neutral-600 transition-all group/item active:bg-neutral-800"
               >
                 <div className="flex items-center gap-3 overflow-hidden">
                     <div className="w-8 h-8 rounded-full bg-neutral-800 flex items-center justify-center text-lg flex-shrink-0 group-hover/item:bg-neutral-700 transition-colors">
@@ -115,7 +106,8 @@ const StyleCard: React.FC<StyleCardProps> = ({
         </ul>
       </div>
 
-      {isSelected && (
+      {/* Button Container with smooth fade/slide */}
+      <div className={`overflow-hidden transition-all duration-300 ${isSelected ? 'max-h-20 opacity-100 mt-auto' : 'max-h-0 opacity-0'}`}>
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -123,10 +115,10 @@ const StyleCard: React.FC<StyleCardProps> = ({
           }}
           disabled={isProcessingGlobal} 
           className={`
-            w-full mt-auto font-semibold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-3 text-sm tracking-wide uppercase shadow-lg mb-1
+            w-full font-semibold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-3 text-sm tracking-wide uppercase shadow-lg mb-1
             ${isProcessingGlobal 
                 ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed' 
-                : 'bg-amber-600 hover:bg-amber-500 text-black shadow-amber-900/20'}
+                : 'bg-amber-600 hover:bg-amber-500 text-black shadow-amber-900/20 active:scale-[0.98]'}
           `}
         >
           {isGenerating ? (
@@ -146,7 +138,7 @@ const StyleCard: React.FC<StyleCardProps> = ({
             </>
           )}
         </button>
-      )}
+      </div>
     </div>
   );
 };
