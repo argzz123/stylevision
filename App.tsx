@@ -1101,7 +1101,7 @@ const App: React.FC = () => {
                                   afterImage={currentImage} 
                                />
                                {/* Actions overlay */}
-                               <div className="absolute top-4 right-4 flex gap-2 z-20">
+                               <div className="absolute bottom-4 right-4 flex gap-2 z-20">
                                   <button onClick={() => downloadImage(currentImage, `stylevision_${Date.now()}.png`)} className="bg-black/50 hover:bg-black/70 text-white p-2 rounded-full backdrop-blur transition-all">
                                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                                   </button>
