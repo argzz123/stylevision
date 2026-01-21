@@ -83,46 +83,24 @@ const App: React.FC = () => {
   // Helper: Is Admin?
   const isAdmin = (id: number) => ADMIN_IDS.includes(id);
 
-  // Helper: Download/Share Image
+  // Helper: Download Image (Force Download instead of Copy)
   const downloadImage = async (dataUrl: string, filename: string) => {
-    const tg = (window as any).Telegram?.WebApp;
-    const isTg = !!tg && !!tg.initData;
-
-    // 1. TELEGRAM MODE: Copy to Clipboard
-    if (isTg) {
-        try {
-            // Превращаем DataURL в Blob
-            const response = await fetch(dataUrl);
-            const blob = await response.blob();
-
-            // Создаем элемент буфера обмена
-            // Важно: navigator.clipboard работает только в безопасном контексте (HTTPS/Localhost)
-            // Telegram Mini Apps работают в WebView, который обычно поддерживает это.
-            const item = new ClipboardItem({ [blob.type]: blob });
-            
-            await navigator.clipboard.write([item]);
-
-            // Используем нативный алерт Телеграма
-            if (tg.showAlert) {
-                tg.showAlert('Фото скопировано в буфер обмена! Теперь вы можете вставить его в чат.');
-            } else {
-                alert('Фото скопировано! Вставьте его в сообщение.');
-            }
-
-        } catch (e: any) {
-            console.error("Clipboard failed:", e);
-            alert(`Не удалось скопировать (ограничение устройства). Пожалуйста, сделайте скриншот или откройте в браузере.`);
-        }
-        return;
+    // Universal Download Logic for Web and basic Mobile usage
+    // For Telegram WebApp, creating an anchor tag usually triggers the browser's download behavior
+    // or opens the image in a new tab where the user can long-press to save.
+    
+    try {
+       const link = document.createElement('a');
+       link.href = dataUrl;
+       link.download = filename;
+       link.target = '_blank'; // Important for Telegram WebApp to handle it correctly
+       document.body.appendChild(link);
+       link.click();
+       document.body.removeChild(link);
+    } catch (e) {
+       console.error("Download failed:", e);
+       alert("Не удалось скачать файл автоматически. Попробуйте открыть его в браузере.");
     }
-
-    // 2. Desktop/Web Fallback: Classic Download
-    const link = document.createElement('a');
-    link.href = dataUrl;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
 
   const handleDeleteHistoryItem = async (e: React.MouseEvent, itemId: string) => {
@@ -706,17 +684,17 @@ const App: React.FC = () => {
                         <div className="aspect-[3/4] relative overflow-hidden group/image">
                            <img src={item.resultImage || item.originalImage} className="w-full h-full object-cover" alt="History" />
                            
-                           {/* Download Button */}
+                           {/* Download Button (Updated to Force Download) */}
                            <button 
                               onClick={(e) => {
                                  e.stopPropagation();
                                  downloadImage(item.resultImage || item.originalImage, `stylevision_${item.id}.png`);
                               }}
                               className="absolute bottom-2 right-2 w-8 h-8 flex items-center justify-center bg-black/60 hover:bg-amber-600 text-white rounded-full transition-colors backdrop-blur-sm shadow-lg z-10"
-                              title="Скопировать / Скачать"
+                              title="Скачать"
                            >
                               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                               </svg>
                            </button>
 
@@ -1005,9 +983,9 @@ const App: React.FC = () => {
                         className="w-full bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-white font-medium py-3 rounded-lg flex items-center justify-center gap-2 mb-4 transition-colors"
                       >
                          <svg className="w-5 h-5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                          </svg>
-                         Сохранить / Скопировать
+                         Скачать
                       </button>
                   )}
 

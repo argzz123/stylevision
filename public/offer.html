@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Публичная оферта - StyleVision</title>
+    <title>Публичная оферта - StyleVision AI</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -18,13 +18,16 @@
         h1, h2, h3, h4, .serif {
             font-family: 'Playfair Display', serif;
         }
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #050505; }
-        ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+        .gradient-text {
+             background: linear-gradient(to right, #d97706, #f59e0b);
+             -webkit-background-clip: text;
+             -webkit-text-fill-color: transparent;
+        }
     </style>
 </head>
 <body class="min-h-screen flex flex-col">
 
+    <!-- Header -->
     <header class="sticky top-0 z-50 backdrop-blur-md bg-black/80 border-b border-neutral-800">
         <div class="max-w-4xl mx-auto px-6 h-20 flex items-center justify-between">
             <a href="/" class="flex items-center gap-3 group">
@@ -36,104 +39,96 @@
                 </h1>
             </a>
             <a href="/" class="text-xs uppercase font-bold tracking-widest text-neutral-400 hover:text-white transition-colors border border-neutral-800 px-4 py-2 rounded-full">
-                Назад
+                На главную
             </a>
         </div>
     </header>
 
+    <!-- Content -->
     <main class="flex-grow py-12 px-6">
-        <div class="max-w-4xl mx-auto">
+        <div class="max-w-3xl mx-auto">
             <div class="text-center mb-12">
-                <span class="text-amber-500 text-xs font-bold tracking-[0.3em] uppercase block mb-3">Юридически значимый документ</span>
-                <h2 class="text-2xl md:text-4xl font-serif text-white mb-6 leading-tight">Публичная оферта</h2>
-                <p class="text-neutral-500 text-sm">Действующая редакция от 19.01.2026</p>
+                <span class="text-amber-500 text-xs font-bold tracking-[0.3em] uppercase block mb-3">Legal Document</span>
+                <h2 class="text-3xl md:text-5xl font-serif text-white mb-6">Публичная оферта</h2>
+                <p class="text-neutral-500 text-sm">Редакция от 24.02.2025</p>
             </div>
 
-            <div class="space-y-10 text-neutral-300 leading-relaxed font-light text-sm md:text-base text-justify">
+            <div class="space-y-12 text-neutral-300 leading-relaxed font-light">
                 
                 <section>
-                    <h3 class="text-lg text-white font-serif mb-4 flex items-center gap-3">
-                        <span class="text-amber-600 font-sans">1.</span> Кто мы и о чем этот договор
+                    <h3 class="text-xl text-white font-serif mb-4 flex items-center gap-3">
+                        <span class="text-amber-600">01.</span> Общие положения
                     </h3>
-                    <div class="bg-[#0f0f0f] p-6 rounded-xl border border-neutral-800/50 space-y-4">
-                        <p>1.1. Данный документ — это официальное предложение (оферта) заключить договор. Исполнителем является <strong>Передвигин Никита Владимирович</strong> (ИНН 13912267556), применяющий специальный налоговый режим «Налог на профессиональный доход» (Самозанятый).</p>
-                        <p>1.2. <strong>Акцепт (принятие условий):</strong> Оплачивая услуги или начиная пользоваться сервисом StyleVision (загружая фото, нажимая кнопки генерации), вы (Заказчик) полностью соглашаетесь со всеми пунктами этого документа без исключений (ст. 438 ГК РФ).</p>
-                        <p>1.3. Сервис носит развлекательный характер и предназначен для художественной обработки изображений с помощью алгоритмов искусственного интеллекта.</p>
+                    <div class="bg-[#111] p-6 rounded-xl border border-neutral-800/50">
+                        <p class="mb-3">1.1. Настоящий документ является официальным предложением (публичной офертой) физического лица Передвигина Никиты Владимировича, применяющего специальный налоговый режим «Налог на профессиональный доход» (далее — «Исполнитель»), заключить договор на изложенных ниже условиях с любым физическим лицом (далее — «Заказчик»).</p>
+                        <p>1.2. Акцептом (принятием) оферты признается оплата Заказчиком услуг Исполнителя или регистрация в веб-приложении StyleVision AI.</p>
                     </div>
                 </section>
 
                 <section>
-                    <h3 class="text-lg text-white font-serif mb-4 flex items-center gap-3">
-                        <span class="text-amber-600 font-sans">2.</span> Суть услуги
+                    <h3 class="text-xl text-white font-serif mb-4 flex items-center gap-3">
+                        <span class="text-amber-600">02.</span> Предмет договора
                     </h3>
-                    <div class="bg-[#0f0f0f] p-6 rounded-xl border border-neutral-800/50 space-y-4">
-                        <p>2.1. Исполнитель предоставляет доступ к программному коду (нейросетям) для обработки загруженных Заказчиком фотографий.</p>
-                        <p>2.2. <strong>Момент оказания услуги:</strong> Услуга считается оказанной полностью и надлежащего качества в момент, когда Сервис отправил запрос на генерацию и предоставил результат (изображение) в интерфейсе, либо ссылку на него.</p>
-                        <p>2.3. Заказчик понимает, что в основе Сервиса лежит искусственный интеллект, работа которого может быть непредсказуемой.</p>
+                    <div class="bg-[#111] p-6 rounded-xl border border-neutral-800/50">
+                        <p class="mb-3">2.1. Исполнитель обязуется предоставить Заказчику доступ к функционалу веб-приложения StyleVision AI для обработки фотографий с использованием алгоритмов искусственного интеллекта, а Заказчик обязуется оплатить эти услуги (при выборе платных тарифов).</p>
+                        <p>2.2. Результатом услуги является предоставление Заказчику возможности скачать или просмотреть обработанное изображение.</p>
                     </div>
                 </section>
 
                 <section>
-                    <h3 class="text-lg text-white font-serif mb-4 flex items-center gap-3">
-                        <span class="text-amber-600 font-sans">3.</span> Деньги и отсутствие возвратов
+                    <h3 class="text-xl text-white font-serif mb-4 flex items-center gap-3">
+                        <span class="text-amber-600">03.</span> Порядок расчетов
                     </h3>
-                    <div class="bg-[#0f0f0f] p-6 rounded-xl border border-neutral-800/50 space-y-4">
-                        <p>3.1. Оплата производится в виде 100% предоплаты. Услуга не облагается НДС.</p>
-                        <div class="border-l-2 border-amber-600 pl-4 py-1 my-4">
-                            <p class="font-medium text-white mb-2">3.2. ВАЖНО ПРО ВОЗВРАТЫ:</p>
-                            <p>Сервис предоставляет право использования вычислительных мощностей. После того как генерация произведена, услуга потреблена. <span class="text-amber-500">Возврат денег не производится</span> в следующих случаях:</p>
-                            <ul class="list-disc list-inside mt-2 space-y-1 text-neutral-400">
-                                <li>Результат не понравился вам эстетически;</li>
-                                <li>Нейросеть добавила артефакты (лишние пальцы, искажения фона и т.д.);</li>
-                                <li>Вы передумали пользоваться услугой после оплаты;</li>
-                                <li>Вы ожидали фотографического сходства, а получили художественную стилизацию.</li>
-                            </ul>
-                        </div>
-                        <p>3.3. Возврат возможен исключительно в случае технического сбоя, когда деньги списаны, а услуга генерации не была предоставлена (изображение не создано).</p>
+                    <div class="bg-[#111] p-6 rounded-xl border border-neutral-800/50">
+                        <p class="mb-3">3.1. Услуги оплачиваются Заказчиком в порядке 100% предоплаты через платежный сервис ЮKassa.</p>
+                        <p class="mb-3">3.2. Стоимость услуг определяется тарифами, указанными в интерфейсе приложения на момент оплаты.</p>
+                        <p>3.3. Исполнитель не хранит данные банковских карт Заказчика. Обработка платежных данных производится на стороне платежного сервиса.</p>
                     </div>
                 </section>
 
                 <section>
-                    <h3 class="text-lg text-white font-serif mb-4 flex items-center gap-3">
-                        <span class="text-amber-600 font-sans">4.</span> Ваша ответственность и контент
+                    <h3 class="text-xl text-white font-serif mb-4 flex items-center gap-3">
+                        <span class="text-amber-600">04.</span> Политика возврата средств (Refund Policy)
                     </h3>
-                    <div class="bg-[#0f0f0f] p-6 rounded-xl border border-neutral-800/50 space-y-4">
-                        <p>4.1. Заказчик гарантирует, что владеет правами на все загружаемые фото. Если вы загружаете фото третьих лиц, вы гарантируете, что у вас есть их согласие.</p>
-                        <p>4.2. <strong>Инлемнификация:</strong> Если к Исполнителю будет предъявлен иск от третьих лиц (например, за нарушение авторских прав или использование чьего-то лица без спроса) в связи с вашими действиями, вы обязуетесь возместить Исполнителю все убытки и юридические расходы.</p>
-                        <p>4.3. Запрещено загружать материалы, нарушающие закон РФ (порнография, экстремизм и т.д.). За нарушение — вечный бан без возврата средств.</p>
+                    <div class="bg-[#111] p-6 rounded-xl border border-neutral-800/50">
+                        <p class="mb-3">4.1. Услуга считается оказанной Исполнителем надлежащим образом в полном объеме в момент предоставления Заказчику доступа к результату обработки (сгенерированному изображению), независимо от того, соответствует ли результат субъективным ожиданиям Заказчика.</p>
+                        <p class="mb-3">4.2. Возврат денежных средств возможен только в случае, если услуга не была оказана по вине Исполнителя (технический сбой, в результате которого изображение не было сгенерировано).</p>
+                        <p>4.3. Для оформления возврата Заказчик должен направить мотивированное заявление на электронную почту <a href="mailto:info@stylevision.fun" class="text-amber-500 hover:underline">info@stylevision.fun</a>. Срок рассмотрения заявки — до 10 рабочих дней.</p>
                     </div>
                 </section>
 
                 <section>
-                    <h3 class="text-lg text-white font-serif mb-4 flex items-center gap-3">
-                        <span class="text-amber-600 font-sans">5.</span> Отказ от ответственности (As Is)
+                    <h3 class="text-xl text-white font-serif mb-4 flex items-center gap-3">
+                        <span class="text-amber-600">05.</span> Ограничение ответственности
                     </h3>
-                    <div class="bg-[#0f0f0f] p-6 rounded-xl border border-neutral-800/50 space-y-4">
-                        <p>5.1. Сервис предоставляется «как есть». Исполнитель не дает гарантий, что результат будет соответствовать вашим ожиданиям, пригоден для конкретной цели или что Сервис будет работать без перебоев.</p>
-                        <p>5.2. Исполнитель не отвечает за сбои в работе сторонних API, хостинг-провайдеров и каналов связи.</p>
-                        <p>5.3. Максимальная имущественная ответственность Исполнителя по любым искам ограничена суммой, фактически уплаченной Заказчиком за конкретную услугу.</p>
+                    <div class="bg-[#111] p-6 rounded-xl border border-neutral-800/50">
+                        <p class="mb-3">5.1. Сервис предоставляется по принципу «как есть» (as is). Исполнитель использует сторонние технологии искусственного интеллекта (в т.ч. Gemini) и не гарантирует безошибочную работу алгоритмов или точное соответствие результата творческим ожиданиям Заказчика.</p>
+                        <p>5.2. Заказчик гарантирует, что имеет право на редактирование загружаемых фотографий и они не нарушают законодательство РФ.</p>
                     </div>
                 </section>
 
                 <section>
-                    <h3 class="text-lg text-white font-serif mb-4 flex items-center gap-3">
-                        <span class="text-amber-600 font-sans">6.</span> Реквизиты
+                    <h3 class="text-xl text-white font-serif mb-4 flex items-center gap-3">
+                        <span class="text-amber-600">06.</span> Реквизиты Исполнителя
                     </h3>
                     <div class="bg-gradient-to-br from-[#151515] to-[#0a0a0a] p-8 rounded-xl border border-amber-900/30">
-                        <div class="grid md:grid-cols-2 gap-8 text-sm">
+                        <div class="grid md:grid-cols-2 gap-6 text-sm">
                             <div>
-                                <p class="text-neutral-500 uppercase tracking-widest text-[10px] mb-1">Исполнитель</p>
-                                <p class="text-white text-base mb-4 font-serif">Передвигин Никита Владимирович</p>
+                                <p class="text-neutral-500 uppercase tracking-widest text-xs mb-1">Юридический статус</p>
+                                <p class="text-white mb-4">Самозанятый (НПД)</p>
                                 
-                                <p class="text-neutral-500 uppercase tracking-widest text-[10px] mb-1">Статус</p>
-                                <p class="text-white mb-4">Плательщик налога на профессиональный доход (Самозанятый)</p>
+                                <p class="text-neutral-500 uppercase tracking-widest text-xs mb-1">ФИО</p>
+                                <p class="text-white mb-4">Передвигин Никита Владимирович</p>
                                 
-                                <p class="text-neutral-500 uppercase tracking-widest text-[10px] mb-1">ИНН</p>
-                                <p class="text-white font-mono text-amber-500/90">13912267556</p>
+                                <p class="text-neutral-500 uppercase tracking-widest text-xs mb-1">ИНН</p>
+                                <p class="text-white">13912267556</p>
                             </div>
-                            <div class="flex flex-col justify-end md:items-end md:text-right">
-                                <p class="text-neutral-500 uppercase tracking-widest text-[10px] mb-1">Вопросы и претензии</p>
-                                <a href="mailto:info@stylevision.fun" class="text-white mb-4 block hover:text-amber-500 transition-colors">info@stylevision.fun</a>
+                            <div class="flex flex-col justify-end">
+                                <p class="text-neutral-500 uppercase tracking-widest text-xs mb-1">Email</p>
+                                <a href="mailto:info@stylevision.fun" class="text-amber-500 mb-4 block hover:underline">info@stylevision.fun</a>
+                                
+                                <p class="text-neutral-500 uppercase tracking-widest text-xs mb-1">Телефон</p>
+                                <p class="text-white">+79809282797</p>
                             </div>
                         </div>
                     </div>
@@ -143,8 +138,9 @@
         </div>
     </main>
 
-    <footer class="border-t border-neutral-900 py-8 text-center mt-8">
-        <p class="text-neutral-600 text-xs">© 2026 StyleVision. Все права защищены.</p>
+    <!-- Footer -->
+    <footer class="border-t border-neutral-900 py-8 text-center">
+        <p class="text-neutral-600 text-xs">© 2025 StyleVision AI. Все права защищены.</p>
     </footer>
 
 </body>

@@ -15,11 +15,15 @@ const getMimeType = (base64: string) => {
   return match ? match[1] : 'image/jpeg';
 };
 
-// --- IMAGE COMPRESSION UTILITY ---
-const compressImage = (base64Str: string, maxWidth = 1024, quality = 0.8): Promise<string> => {
+// --- IMAGE COMPRESSION & CONVERSION UTILITY ---
+const compressImage = (imageSource: string, maxWidth = 1024, quality = 0.8): Promise<string> => {
   return new Promise((resolve) => {
     const img = new Image();
-    img.src = base64Str;
+    // CRITICAL FIX: Allow loading images from Supabase Storage (cross-origin)
+    // to draw them on canvas and convert back to Base64 for Gemini API
+    img.crossOrigin = "Anonymous"; 
+    img.src = imageSource;
+    
     img.onload = () => {
       const canvas = document.createElement('canvas');
       let width = img.width;
@@ -43,17 +47,23 @@ const compressImage = (base64Str: string, maxWidth = 1024, quality = 0.8): Promi
       const ctx = canvas.getContext('2d');
       if (ctx) {
           ctx.drawImage(img, 0, 0, width, height);
-          // Always convert to JPEG for efficiency, even if original was PNG
-          const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
-          resolve(compressedDataUrl);
+          // Always convert to JPEG for efficiency
+          // This also converts URL -> Base64 string
+          try {
+             const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+             resolve(compressedDataUrl);
+          } catch (e) {
+             console.error("Canvas export failed (CORS?)", e);
+             // Fallback: return original if canvas fails, though API might reject URL
+             resolve(imageSource);
+          }
       } else {
-          // Fallback if canvas context fails
-          resolve(base64Str);
+          resolve(imageSource);
       }
     };
-    img.onerror = () => {
-       // Fallback if image fails to load
-       resolve(base64Str);
+    img.onerror = (e) => {
+       console.error("Image load failed", e);
+       resolve(imageSource);
     };
   });
 };
@@ -101,7 +111,6 @@ const parseJSON = (text: string) => {
 
 /**
  * ERROR MAPPING UTILITY
- * Translates technical errors into stylish user-friendly messages
  */
 const mapFriendlyError = (error: any): Error => {
     const msg = (error.message || '').toLowerCase();
@@ -184,7 +193,6 @@ const callGeminiProxy = async (
         (payload as any).tools = tools;
     }
 
-    // Increase retries significantly for 503s
     const MAX_RETRIES = 6;
     let attempt = 0;
 
@@ -201,12 +209,10 @@ const callGeminiProxy = async (
             });
 
             if (!response.ok) {
-                // Handle Vercel Serverless Function Limits (413 Payload Too Large)
                 if (response.status === 413) {
                     throw new Error("Payload Too Large (413). Image is too big.");
                 }
                 
-                // Try to parse JSON error, if fails (e.g. Vercel HTML error page), throw text
                 let errMsg = 'Proxy Error';
                 try {
                     const err = await response.json();
@@ -230,24 +236,18 @@ const callGeminiProxy = async (
             const isOverloaded = error.message?.toLowerCase().includes('overloaded') || error.message?.includes('503');
 
             if (isOverloaded && attempt < MAX_RETRIES) {
-                // AUTO RETRY LOGIC - NO THROW
-                const waitTime = attempt * 5; // 5s, 10s, 15s...
-                
+                const waitTime = attempt * 5; 
                 if (onStatusUpdate) {
                     onStatusUpdate(`Сервер загружен. Вы в очереди... (Попытка ${attempt}/${MAX_RETRIES}). Ожидание ~${waitTime}с`);
                 }
-                
-                // Exponential backoff
                 await wait(waitTime * 1000);
-                continue; // Retry loop
+                continue; 
             }
 
-            // If it's the last attempt or a non-retriable error, throw it
             if (attempt === MAX_RETRIES) {
                 throw error;
             }
             
-            // For other non-fatal errors (network blips), retry quickly once
             if (!isOverloaded && attempt < 2) {
                  await wait(1000);
                  continue;
@@ -275,8 +275,8 @@ export const analyzeUserImage = async (
     };
   }
 
-  // COMPRESS BEFORE SENDING
-  if (onStatusUpdate) onStatusUpdate("Оптимизация фото...");
+  // NOTE: We do not overwrite status here to "Optimization"
+  // We compress silently, or let the caller set "Analyzing..."
   const compressedImage = await compressImage(base64Image, 1024, 0.75);
 
   let promptInstructions = "";
@@ -458,32 +458,6 @@ export const getStyleRecommendations = async (
   }
 };
 
-export const findShoppingProducts = async (itemQuery: string): Promise<ShoppingProduct[]> => {
-  if (IS_DEMO_MODE) return [];
-
-  const prompt = `
-    TASK: Find 3 real products for "${itemQuery}" in Russia.
-    Return JSON: title, price, store, imageUrl.
-  `;
-
-  try {
-      const response = await callGeminiProxy(
-          'gemini-3-flash-preview',
-          { parts: [{ text: prompt }] },
-          {}, 
-          [{ googleSearch: {} }]
-      );
-
-      if (response.text) {
-        const products = parseJSON(response.text) as ShoppingProduct[];
-        return products.map(p => ({ ...p, url: '' }));
-      }
-      return [];
-  } catch (error) {
-      return [];
-  }
-};
-
 export const editUserImage = async (
     base64Image: string, 
     textPrompt: string, 
@@ -494,8 +468,8 @@ export const editUserImage = async (
 
   const model = 'gemini-2.5-flash-image';
 
-  // COMPRESS BEFORE SENDING
-  if (onStatusUpdate) onStatusUpdate("Оптимизация фото...");
+  // NOTE: We silently compress/convert URL to base64 here. 
+  // We do not change the status message to "Optimizing" to keep UI consistent.
   const compressedImage = await compressImage(base64Image, 1024, 0.85);
 
   const parts: any[] = [
@@ -503,7 +477,6 @@ export const editUserImage = async (
   ];
 
   if (maskImage) {
-    // Also compress mask slightly to be safe
     const compressedMask = await compressImage(maskImage, 1024, 0.85);
     parts.push({ inlineData: { data: cleanBase64(compressedMask), mimeType: 'image/jpeg' } });
     textPrompt = `${textPrompt}. Use the second image as a mask.`;
