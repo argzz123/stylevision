@@ -668,13 +668,8 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#050505] text-neutral-300 font-sans flex flex-col relative pb-20 md:pb-12 overflow-x-hidden">
       
-      {/* Banner */}
-      <div className="bg-amber-600 text-black text-[10px] font-bold text-center py-1 tracking-[0.2em] uppercase sticky top-0 z-[60]">
-        Режим Презентации • Приложение в разработке
-      </div>
-
       {/* Header */}
-      <header className="sticky top-[22px] z-50 backdrop-blur-md bg-black/80 border-b border-neutral-800">
+      <header className="sticky top-0 z-50 backdrop-blur-md bg-black/80 border-b border-neutral-800">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           
           <div className="flex items-center gap-4">
