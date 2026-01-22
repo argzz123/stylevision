@@ -34,6 +34,7 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [initError, setInitError] = useState<string | null>(null);
+  const [loadingStatusText, setLoadingStatusText] = useState("Настраиваем AI стилиста...");
 
   // Auth State
   const [user, setUser] = useState<TelegramUser | null>(null);
@@ -144,6 +145,27 @@ const App: React.FC = () => {
     await storageService.deleteHistoryItem(user.id, itemId);
   };
 
+  // --- RETRY LOGIC WRAPPER ---
+  const withRetry = async <T,>(fn: () => Promise<T>, attempts: number = 3, baseDelay: number = 1500): Promise<T> => {
+      for (let i = 0; i < attempts; i++) {
+          try {
+              return await fn();
+          } catch (error) {
+              const isLastAttempt = i === attempts - 1;
+              if (isLastAttempt) throw error;
+              
+              // Update status text
+              const attemptNum = i + 2; // 1st failed, so next is 2
+              setLoadingStatusText(`Слабая сеть. Повторное подключение (${attemptNum}/${attempts})...`);
+              
+              // Exponential backoff or step delay
+              const delay = baseDelay + (i * 1000); 
+              await new Promise(resolve => setTimeout(resolve, delay));
+          }
+      }
+      throw new Error("Failed after retries");
+  };
+
   // --- OPTIMIZED INITIALIZATION LOGIC ---
   useEffect(() => {
     const initApp = async () => {
@@ -165,11 +187,15 @@ const App: React.FC = () => {
                     tg.setHeaderColor('#050505');
                     tg.setBackgroundColor('#050505');
                 }
+                
+                // Signal ready immediately to avoid timeouts
+                tg.ready();
             }
             
-            // Step 2: Fetch Critical Data (Parallel)
-            // Use Promise.allSettled or just await to ensure config loads
-            const config = await storageService.getGlobalConfig();
+            // Step 2: Fetch Critical Data with Auto-Retry
+            setLoadingStatusText("Настраиваем AI стилиста...");
+            
+            const config = await withRetry(() => storageService.getGlobalConfig());
             setGlobalConfig(config);
             
             setLoadingProgress(50); // Milestone
@@ -180,8 +206,9 @@ const App: React.FC = () => {
             // Check Telegram Auth First
             if (tg && tg.initDataUnsafe?.user) {
                 const tgUser = tg.initDataUnsafe.user;
-                // Fetch from DB
-                const dbUser = await storageService.getUser(tgUser.id);
+                
+                // Fetch User Data with Retry
+                const dbUser = await withRetry(() => storageService.getUser(tgUser.id));
                 
                 currentUser = {
                     ...tgUser,
@@ -189,7 +216,7 @@ const App: React.FC = () => {
                     subscriptionExpiresAt: dbUser?.subscriptionExpiresAt
                 };
                 
-                // Sync to DB in background (don't await strictly if not critical)
+                // Sync to DB in background (no retry needed, non-blocking)
                 storageService.saveUser(currentUser!); 
             } 
             // Fallback to LocalStorage
@@ -198,10 +225,10 @@ const App: React.FC = () => {
                 if (storedUser) {
                     try {
                         const parsedUser = JSON.parse(storedUser);
-                        // Refresh from DB
-                        const dbUser = await storageService.getUser(parsedUser.id);
+                        // Refresh from DB with retry
+                        const dbUser = await withRetry(() => storageService.getUser(parsedUser.id));
                         currentUser = { ...parsedUser, ...dbUser };
-                        // Sync
+                        
                         storageService.saveUser(currentUser!);
                     } catch (e) {
                          console.warn("Invalid local user data");
@@ -212,24 +239,22 @@ const App: React.FC = () => {
             if (currentUser) {
                  setUser(currentUser);
                  localStorage.setItem('stylevision_current_user', JSON.stringify(currentUser));
-                 await loadUserData(currentUser.id); // Load history, pro status
+                 // Load history and pro status with retry
+                 await withRetry(() => loadUserData(currentUser!.id)); 
             }
 
             // Step 4: Finalize
             clearInterval(progressInterval);
             setLoadingProgress(100);
             
-            // Artificial small delay to let the 100% bar render and ensure heavy JS is parsed
+            // Artificial small delay to let the 100% bar render
             setTimeout(() => {
-                if (tg) {
-                    tg.ready(); // Signal Telegram that we are ready!
-                }
                 setIsLoading(false);
             }, 600);
 
         } catch (error: any) {
             console.error("Initialization Failed:", error);
-            setInitError("Не удалось загрузить данные приложения. Проверьте интернет.");
+            setInitError("Не удалось загрузить данные. Проверьте соединение.");
         }
     };
 
@@ -239,7 +264,9 @@ const App: React.FC = () => {
   const handleRetryInit = () => {
       setInitError(null);
       setLoadingProgress(0);
+      setLoadingStatusText("Настраиваем AI стилиста...");
       setIsLoading(true);
+      // Simply reload the window to restart the lifecycle
       window.location.reload();
   };
 
@@ -248,7 +275,6 @@ const App: React.FC = () => {
      localStorage.setItem('stylevision_current_user', JSON.stringify(userData));
      await storageService.saveUser(userData);
      await loadUserData(userData.id);
-     // No need to set isAuthChecking, handled by isLoading now
   }, []);
 
   const handleUpgradeAccount = useCallback(async (upgradedUser: TelegramUser) => {
@@ -296,6 +322,8 @@ const App: React.FC = () => {
         }
     } catch (e) {
         console.error("Failed to load user extra data", e);
+        // We don't throw here to prevent blocking the app login, 
+        // as history failure shouldn't stop the user from using the app.
     }
   };
 
@@ -578,6 +606,7 @@ const App: React.FC = () => {
             progress={loadingProgress} 
             error={initError} 
             onRetry={handleRetryInit}
+            message={loadingStatusText}
           />
       );
   }
@@ -922,7 +951,7 @@ const App: React.FC = () => {
                            ) : (
                                <>
                                 <p>• Безлимитная генерация образов на 30 дней</p>
-                                <p>• Приоритетная обработка (без очереди)</p>
+                                <p>• Приоритетная обработка</p>
                                 <p>• Доступ к функции примерки (Virtual Try-On)</p>
                                 </>
                            )}

@@ -5,9 +5,10 @@ interface LoadingScreenProps {
   progress: number;
   error?: string | null;
   onRetry?: () => void;
+  message?: string; // New prop for custom status text
 }
 
-const LoadingScreen: React.FC<LoadingScreenProps> = ({ progress, error, onRetry }) => {
+const LoadingScreen: React.FC<LoadingScreenProps> = ({ progress, error, onRetry, message }) => {
   return (
     <div className="fixed inset-0 z-[999] bg-[#050505] flex flex-col items-center justify-center p-6 overflow-hidden">
       
@@ -60,8 +61,8 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({ progress, error, onRetry 
                 ></div>
              </div>
              
-             <p className="text-center text-neutral-600 text-[10px] mt-4 font-light">
-                Настраиваем AI стилиста...
+             <p className="text-center text-neutral-600 text-[10px] mt-4 font-light transition-all duration-300">
+                {message || "Настраиваем AI стилиста..."}
              </p>
           </div>
         )}
