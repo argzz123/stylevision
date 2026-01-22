@@ -10,6 +10,7 @@ import LoginScreen from './components/LoginScreen';
 import LoadingScreen from './components/LoadingScreen'; // New Import
 import AdminPanel from './components/AdminPanel';
 import ImageEditor from './components/ImageEditor';
+import { triggerHaptic } from './utils/haptics'; // Haptics Import
 
 // ADMIN ID CONSTANT (Array)
 const ADMIN_IDS = [643780299, 1613288376];
@@ -90,6 +91,7 @@ const App: React.FC = () => {
 
   // Helper: Download Image (Robust with Context Check)
   const downloadImage = async (dataUrl: string, filename: string) => {
+    triggerHaptic('light');
     // Check if running inside Telegram WebApp
     const tg = (window as any).Telegram?.WebApp;
     const isTelegram = !!tg?.initData;
@@ -135,11 +137,13 @@ const App: React.FC = () => {
 
   const handleDeleteHistoryItem = async (e: React.MouseEvent, itemId: string) => {
     e.stopPropagation();
+    triggerHaptic('warning');
     if (!user) return;
     if (!window.confirm("Вы уверены, что хотите удалить этот образ?")) return;
 
     // Optimistic Update
     setHistory(prev => prev.filter(item => item.id !== itemId));
+    triggerHaptic('success');
     
     // Background Server Delete
     await storageService.deleteHistoryItem(user.id, itemId);
@@ -262,6 +266,7 @@ const App: React.FC = () => {
   }, []);
 
   const handleRetryInit = () => {
+      triggerHaptic('medium');
       setInitError(null);
       setLoadingProgress(0);
       setLoadingStatusText("Настраиваем AI стилиста...");
@@ -271,6 +276,7 @@ const App: React.FC = () => {
   };
 
   const handleLogin = useCallback(async (userData: TelegramUser) => {
+     triggerHaptic('success');
      setUser(userData);
      localStorage.setItem('stylevision_current_user', JSON.stringify(userData));
      await storageService.saveUser(userData);
@@ -301,6 +307,7 @@ const App: React.FC = () => {
             const isPaid = await checkPaymentStatus(pendingPaymentId);
             
             if (isPaid) {
+                triggerHaptic('success');
                 const expiresAt = new Date();
                 expiresAt.setDate(expiresAt.getDate() + 30);
                 const expiresIso = expiresAt.toISOString();
@@ -333,6 +340,7 @@ const App: React.FC = () => {
 
      const count = await storageService.getRecentGenerationsCount(user.id, 5); 
      if (count >= FREE_LIMIT) {
+         triggerHaptic('warning');
          setShowLimitModal(true);
          return false;
      }
@@ -362,6 +370,7 @@ const App: React.FC = () => {
   };
 
   const loadFromHistory = (item: HistoryItem) => {
+     triggerHaptic('selection');
      setOriginalImage(item.originalImage);
      setCurrentImage(item.resultImage);
      setAppState(AppState.RESULTS);
@@ -382,6 +391,7 @@ const App: React.FC = () => {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      triggerHaptic('light');
       const reader = new FileReader();
       reader.onloadend = () => {
         const base64 = reader.result as string;
@@ -396,17 +406,20 @@ const App: React.FC = () => {
   };
 
   const handleModeChange = (mode: AnalysisMode) => {
+    triggerHaptic('light');
     setAnalysisMode(mode);
     setShowObjectiveWarning(mode === 'OBJECTIVE');
   };
 
   const toggleStore = (storeId: string) => {
+    triggerHaptic('selection');
     setStores(prev => prev.map(store => 
       store.id === storeId ? { ...store, isSelected: !store.isSelected } : store
     ));
   };
 
   const handleBuyProClick = () => {
+      triggerHaptic('light');
       if (user?.isGuest) {
           setShowAuthRequest(true);
           return;
@@ -416,6 +429,7 @@ const App: React.FC = () => {
   };
 
   const initiatePayment = async () => {
+    triggerHaptic('medium');
     if (!user) return;
     if (user.isGuest) {
         setShowPaymentModal(false);
@@ -436,6 +450,7 @@ const App: React.FC = () => {
         }
     } catch (e: any) {
         console.error(e);
+        triggerHaptic('error');
         setIsProcessing(false);
         alert(`Ошибка оплаты: ${e.message}.`);
     }
@@ -443,11 +458,13 @@ const App: React.FC = () => {
 
   const performAnalysis = async () => {
      if (user?.isGuest) {
+         triggerHaptic('warning');
          setShowGuestLockModal(true);
          return;
      }
 
      try {
+      triggerHaptic('medium');
       setAppState(AppState.ANALYZING);
       setIsProcessing(true);
       setProcessingMessage('Анализируем ваш профиль...');
@@ -458,6 +475,7 @@ const App: React.FC = () => {
           (msg) => setProcessingMessage(msg)
       );
       setAnalysis(analysisResult);
+      triggerHaptic('success');
       
       setProcessingMessage(`Ищем образы (${selectedSeason === 'ANY' ? 'база' : selectedSeason})...`);
       
@@ -474,8 +492,10 @@ const App: React.FC = () => {
       if (styles.length > 0) setSelectedStyleId(styles[0].id);
       
       setAppState(AppState.RESULTS);
+      triggerHaptic('success');
     } catch (error: any) {
       console.error(error);
+      triggerHaptic('error');
       alert(error.message);
       setAppState(AppState.UPLOAD);
     } finally {
@@ -489,6 +509,7 @@ const App: React.FC = () => {
     if (!originalImage || !analysis) return;
     
     if (user?.isGuest) {
+        triggerHaptic('warning');
         setShowGuestLockModal(true);
         return;
     }
@@ -497,6 +518,7 @@ const App: React.FC = () => {
     if (!canProceed) return;
 
     try {
+      triggerHaptic('medium');
       setIsProcessing(true);
       
       const safeTitle = style.title || "Стильный образ";
@@ -526,9 +548,11 @@ const App: React.FC = () => {
       setCurrentImage(newImage);
       
       saveToHistory(newImage, safeTitle);
+      triggerHaptic('success');
 
     } catch (error: any) {
       console.error(error);
+      triggerHaptic('error');
       alert(error.message);
     } finally {
       setIsProcessing(false);
@@ -539,6 +563,7 @@ const App: React.FC = () => {
      if (!currentImage || !prompt.trim()) return;
 
      if (user?.isGuest) {
+         triggerHaptic('warning');
          setShowGuestLockModal(true);
          return;
      }
@@ -547,6 +572,7 @@ const App: React.FC = () => {
      if (!canProceed) return;
 
      try {
+        triggerHaptic('medium');
         setIsProcessing(true);
         setProcessingMessage('Редактируем фото...');
         const newImage = await editUserImage(
@@ -558,8 +584,10 @@ const App: React.FC = () => {
         setCurrentImage(newImage);
         
         saveToHistory(newImage, "Edit: " + prompt);
+        triggerHaptic('success');
      } catch (err: any) {
         console.error(err);
+        triggerHaptic('error');
         alert(err.message);
      } finally {
         setIsProcessing(false);
@@ -567,6 +595,7 @@ const App: React.FC = () => {
   }
 
   const resetApp = () => {
+    triggerHaptic('light');
     setAppState(AppState.UPLOAD);
     setSetupStep(1);
     setOriginalImage(null);
@@ -576,6 +605,7 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => {
+     triggerHaptic('medium');
      setUser(null);
      localStorage.removeItem('stylevision_current_user');
      setAppState(AppState.UPLOAD);
@@ -590,6 +620,7 @@ const App: React.FC = () => {
   
   // Logic for clicking on Profile Button
   const handleProfileClick = () => {
+      triggerHaptic('light');
       if (user?.isGuest) {
           // If Guest -> Logout/Redirect to Login
           handleLogout();
@@ -708,7 +739,7 @@ const App: React.FC = () => {
                 {user.username || user.first_name}
              </div>
              
-             <button onClick={() => setShowHistory(true)} className="text-neutral-400 hover:text-white flex items-center gap-2">
+             <button onClick={() => { setShowHistory(true); triggerHaptic('light'); }} className="text-neutral-400 hover:text-white flex items-center gap-2">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>
                 <span className="hidden md:inline text-xs uppercase font-bold">Гардероб</span>
              </button>
@@ -951,7 +982,7 @@ const App: React.FC = () => {
                            ) : (
                                <>
                                 <p>• Безлимитная генерация образов на 30 дней</p>
-                                <p>• Приоритетная обработка</p>
+                                <p>• Приоритетная обработка (без очереди)</p>
                                 <p>• Доступ к функции примерки (Virtual Try-On)</p>
                                 </>
                            )}
@@ -1011,7 +1042,7 @@ const App: React.FC = () => {
               </p>
             </div>
 
-            <div onClick={() => fileInputRef.current?.click()} className="w-full max-w-md aspect-[3/2] border border-neutral-800 bg-neutral-900/30 hover:bg-neutral-900 transition-all cursor-pointer flex flex-col items-center justify-center">
+            <div onClick={() => { triggerHaptic('light'); fileInputRef.current?.click(); }} className="w-full max-w-md aspect-[3/2] border border-neutral-800 bg-neutral-900/30 hover:bg-neutral-900 transition-all cursor-pointer flex flex-col items-center justify-center">
               <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
               <div className="w-16 h-16 rounded-full border border-neutral-700 flex items-center justify-center bg-black mb-4">
                  <svg className="w-8 h-8 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
@@ -1048,7 +1079,7 @@ const App: React.FC = () => {
                                   ].map(s => (
                                      <button 
                                         key={s.id} 
-                                        onClick={() => setSelectedSeason(s.id as Season)} 
+                                        onClick={() => { triggerHaptic('light'); setSelectedSeason(s.id as Season); }} 
                                         className={`flex flex-col items-center justify-center p-3 text-sm border rounded-lg transition-all ${selectedSeason === s.id ? 'bg-amber-900/20 border-amber-600 text-white' : 'bg-neutral-900 border-neutral-800 text-neutral-500 hover:border-neutral-600'}`}
                                      >
                                         <span className="text-xs font-medium">{s.l}</span>
@@ -1069,7 +1100,7 @@ const App: React.FC = () => {
                                   ].map(o => (
                                      <button 
                                         key={o.id} 
-                                        onClick={() => setSelectedOccasion(o.id as Occasion)} 
+                                        onClick={() => { triggerHaptic('light'); setSelectedOccasion(o.id as Occasion); }} 
                                         className={`text-left p-3 border rounded-lg transition-all ${selectedOccasion === o.id ? 'bg-neutral-800 border-amber-600 text-white' : 'bg-neutral-900 border-neutral-800 text-neutral-500 hover:border-neutral-600'}`}
                                      >
                                         <div className="font-medium text-sm">{o.l}</div>
@@ -1078,13 +1109,13 @@ const App: React.FC = () => {
                                   ))}
                                </div>
                             </div>
-                            <button onClick={() => setSetupStep(2)} className="w-full bg-white text-black py-4 font-serif uppercase tracking-widest mt-4 hover:bg-neutral-200 transition-colors rounded">Далее</button>
+                            <button onClick={() => { triggerHaptic('light'); setSetupStep(2); }} className="w-full bg-white text-black py-4 font-serif uppercase tracking-widest mt-4 hover:bg-neutral-200 transition-colors rounded">Далее</button>
                          </div>
                       </div>
                     ) : (
                       <div className="animate-fade-in">
                          <div className="flex items-center gap-4 mb-6">
-                           <button onClick={() => setSetupStep(1)} className="p-2 -ml-2 hover:bg-neutral-800 rounded-full text-neutral-500 hover:text-white">
+                           <button onClick={() => { triggerHaptic('light'); setSetupStep(1); }} className="p-2 -ml-2 hover:bg-neutral-800 rounded-full text-neutral-500 hover:text-white">
                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
                            </button>
                            <h2 className="text-2xl font-serif text-white">Где искать вещи?</h2>
@@ -1237,7 +1268,7 @@ const App: React.FC = () => {
                                   key={style.id}
                                   style={style}
                                   isSelected={selectedStyleId === style.id}
-                                  onClick={() => setSelectedStyleId(style.id)}
+                                  onClick={() => { triggerHaptic('selection'); setSelectedStyleId(style.id); }}
                                   onApplyStyle={() => handleApplyStyle(style)}
                                   isGenerating={isProcessing && processingMessage.includes(style.title)}
                                   isProcessingGlobal={isProcessing}

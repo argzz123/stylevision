@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { StyleRecommendation, Store } from '../types';
+import { triggerHaptic } from '../utils/haptics';
 
 interface StyleCardProps {
   style: StyleRecommendation;
@@ -23,6 +24,7 @@ const StyleCard: React.FC<StyleCardProps> = ({
 }) => {
   
   const handleItemClick = (itemName: string) => {
+    triggerHaptic('light');
     const activeStores = stores.filter(s => s.isSelected);
     let searchDomain = '';
     
@@ -111,6 +113,7 @@ const StyleCard: React.FC<StyleCardProps> = ({
         <button
           onClick={(e) => {
             e.stopPropagation();
+            triggerHaptic('medium'); // Stronger feedback for main action
             onApplyStyle();
           }}
           disabled={isProcessingGlobal} 

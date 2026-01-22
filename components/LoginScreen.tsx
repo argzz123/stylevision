@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { TelegramUser } from '../types';
+import { triggerHaptic } from '../utils/haptics';
 
 interface LoginScreenProps {
   onLogin: (user: TelegramUser) => void;
@@ -40,6 +41,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isOverlay = false, o
       if (!(document.getElementById('check_terms') as HTMLInputElement)?.checked || 
           !(document.getElementById('check_privacy') as HTMLInputElement)?.checked) {
           setShowAgreementError(true);
+          triggerHaptic('error');
           return;
       }
       
@@ -73,6 +75,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isOverlay = false, o
     
     if (!termsAccepted || !privacyAccepted) {
         setShowAgreementError(true);
+        triggerHaptic('error');
         return;
     }
 
@@ -91,6 +94,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isOverlay = false, o
   const handleOverlayClick = () => {
       if (!areCheckboxesChecked) {
           setShowAgreementError(true);
+          triggerHaptic('warning');
       }
   };
 
@@ -105,7 +109,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isOverlay = false, o
                 type="checkbox" 
                 id={id} 
                 checked={checked}
-                onChange={(e) => setter(e.target.checked)}
+                onChange={(e) => { triggerHaptic('selection'); setter(e.target.checked); }}
                 className={`
                     appearance-none w-5 h-5 border rounded bg-neutral-900 
                     checked:bg-amber-600 checked:border-amber-600 
