@@ -7,6 +7,7 @@ import { AppState, UserAnalysis, StyleRecommendation, AnalysisMode, Store, Seaso
 import StyleCard from './components/StyleCard';
 import BeforeAfterSlider from './components/BeforeAfterSlider';
 import LoginScreen from './components/LoginScreen';
+import LoadingScreen from './components/LoadingScreen'; // New Import
 import AdminPanel from './components/AdminPanel';
 import ImageEditor from './components/ImageEditor';
 
@@ -29,9 +30,13 @@ const INITIAL_STORES: Store[] = [
 ];
 
 const App: React.FC = () => {
+  // Loading & Init State
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [initError, setInitError] = useState<string | null>(null);
+
   // Auth State
   const [user, setUser] = useState<TelegramUser | null>(null);
-  const [isAuthChecking, setIsAuthChecking] = useState(true);
 
   // App Flow State
   const [appState, setAppState] = useState<AppState>(AppState.UPLOAD);
@@ -139,73 +144,111 @@ const App: React.FC = () => {
     await storageService.deleteHistoryItem(user.id, itemId);
   };
 
-  // Initialize and Check Session
+  // --- OPTIMIZED INITIALIZATION LOGIC ---
   useEffect(() => {
     const initApp = async () => {
-        const config = await storageService.getGlobalConfig();
-        setGlobalConfig(config);
+        try {
+            // Fake progress ticker to make UI feel alive
+            const progressInterval = setInterval(() => {
+                setLoadingProgress(prev => Math.min(prev + (Math.random() * 2), 90));
+            }, 100);
 
-        const tg = (window as any).Telegram?.WebApp;
-        if (tg) {
-            tg.ready();
-            tg.expand();
-            // FIX: Check version before setting header color to avoid errors on old clients
-            if (tg.isVersionAtLeast && tg.isVersionAtLeast('6.1')) {
-                tg.setHeaderColor('#050505');
+            // Step 1: Telegram WebApp Setup (Early check)
+            const tg = (window as any).Telegram?.WebApp;
+            
+            if (tg) {
+                // Expand immediately to prevent white gaps
+                tg.expand();
+                
+                // Safe header color setting (check version)
+                if (tg.isVersionAtLeast && tg.isVersionAtLeast('6.1')) {
+                    tg.setHeaderColor('#050505');
+                    tg.setBackgroundColor('#050505');
+                }
             }
             
-            const tgUser = tg.initDataUnsafe?.user;
-            if (tgUser) {
-                // Ensure we get latest data including subscription from DB
+            // Step 2: Fetch Critical Data (Parallel)
+            // Use Promise.allSettled or just await to ensure config loads
+            const config = await storageService.getGlobalConfig();
+            setGlobalConfig(config);
+            
+            setLoadingProgress(50); // Milestone
+
+            // Step 3: Auth & User Data
+            let currentUser: TelegramUser | null = null;
+            
+            // Check Telegram Auth First
+            if (tg && tg.initDataUnsafe?.user) {
+                const tgUser = tg.initDataUnsafe.user;
+                // Fetch from DB
                 const dbUser = await storageService.getUser(tgUser.id);
                 
-                const fullUser: TelegramUser = { 
-                    ...tgUser, 
+                currentUser = {
+                    ...tgUser,
                     isGuest: false,
                     subscriptionExpiresAt: dbUser?.subscriptionExpiresAt
                 };
                 
-                setUser(fullUser);
-                localStorage.setItem('stylevision_current_user', JSON.stringify(fullUser));
-                
-                // Save/Update user data in BG
-                await storageService.saveUser(fullUser); 
-                await loadUserData(tgUser.id);
-                setIsAuthChecking(false);
-                return;
+                // Sync to DB in background (don't await strictly if not critical)
+                storageService.saveUser(currentUser!); 
+            } 
+            // Fallback to LocalStorage
+            else {
+                const storedUser = localStorage.getItem('stylevision_current_user');
+                if (storedUser) {
+                    try {
+                        const parsedUser = JSON.parse(storedUser);
+                        // Refresh from DB
+                        const dbUser = await storageService.getUser(parsedUser.id);
+                        currentUser = { ...parsedUser, ...dbUser };
+                        // Sync
+                        storageService.saveUser(currentUser!);
+                    } catch (e) {
+                         console.warn("Invalid local user data");
+                    }
+                }
             }
-        }
 
-        const storedUser = localStorage.getItem('stylevision_current_user');
-        if (storedUser) {
-            try {
-                const parsedUser = JSON.parse(storedUser);
-                // Refresh user data from DB to get latest subscription status
-                const dbUser = await storageService.getUser(parsedUser.id);
-                const mergedUser = { ...parsedUser, ...dbUser };
-                
-                setUser(mergedUser);
-                await storageService.saveUser(mergedUser);
-                await loadUserData(mergedUser.id);
-                setIsAuthChecking(false);
-                return;
-            } catch (e) {
-                console.error("Failed to restore session", e);
+            if (currentUser) {
+                 setUser(currentUser);
+                 localStorage.setItem('stylevision_current_user', JSON.stringify(currentUser));
+                 await loadUserData(currentUser.id); // Load history, pro status
             }
-        }
 
-        setIsAuthChecking(false);
+            // Step 4: Finalize
+            clearInterval(progressInterval);
+            setLoadingProgress(100);
+            
+            // Artificial small delay to let the 100% bar render and ensure heavy JS is parsed
+            setTimeout(() => {
+                if (tg) {
+                    tg.ready(); // Signal Telegram that we are ready!
+                }
+                setIsLoading(false);
+            }, 600);
+
+        } catch (error: any) {
+            console.error("Initialization Failed:", error);
+            setInitError("Не удалось загрузить данные приложения. Проверьте интернет.");
+        }
     };
 
     initApp();
   }, []);
+
+  const handleRetryInit = () => {
+      setInitError(null);
+      setLoadingProgress(0);
+      setIsLoading(true);
+      window.location.reload();
+  };
 
   const handleLogin = useCallback(async (userData: TelegramUser) => {
      setUser(userData);
      localStorage.setItem('stylevision_current_user', JSON.stringify(userData));
      await storageService.saveUser(userData);
      await loadUserData(userData.id);
-     setIsAuthChecking(false);
+     // No need to set isAuthChecking, handled by isLoading now
   }, []);
 
   const handleUpgradeAccount = useCallback(async (upgradedUser: TelegramUser) => {
@@ -217,45 +260,43 @@ const App: React.FC = () => {
   }, []);
 
   const loadUserData = async (userId: number) => {
-    const savedHistory = await storageService.getHistory(userId);
-    setHistory(savedHistory);
-
-    let proStatus = await storageService.getProStatus(userId);
-
-    const pendingPaymentId = localStorage.getItem('pending_payment_id');
-    if (pendingPaymentId) {
-        setProcessingMessage('Проверка платежа...');
-        const isPaid = await checkPaymentStatus(pendingPaymentId);
+    try {
+        const [savedHistory, proStatus] = await Promise.all([
+            storageService.getHistory(userId),
+            storageService.getProStatus(userId)
+        ]);
         
-        if (isPaid) {
-            proStatus = true;
-            
-            // Calculate Expiration Date (Now + 30 days)
-            const expiresAt = new Date();
-            expiresAt.setDate(expiresAt.getDate() + 30);
-            const expiresIso = expiresAt.toISOString();
+        setHistory(savedHistory);
 
-            // Update in DB
-            await storageService.setProStatus(userId, true, expiresIso);
+        // Check Pending Payment logic
+        const pendingPaymentId = localStorage.getItem('pending_payment_id');
+        if (pendingPaymentId) {
+            setProcessingMessage('Проверка платежа...');
+            const isPaid = await checkPaymentStatus(pendingPaymentId);
             
-            // Update Local State with new date
-            if (user) {
-                const updatedUser = { 
-                    ...user, 
-                    subscriptionExpiresAt: expiresIso,
-                    // If fetching from DB fails later (no column), we at least have it in state now
-                };
-                setUser(updatedUser);
-                localStorage.setItem('stylevision_current_user', JSON.stringify(updatedUser));
+            if (isPaid) {
+                const expiresAt = new Date();
+                expiresAt.setDate(expiresAt.getDate() + 30);
+                const expiresIso = expiresAt.toISOString();
+
+                await storageService.setProStatus(userId, true, expiresIso);
+                
+                if (user) {
+                    const updatedUser = { ...user, subscriptionExpiresAt: expiresIso };
+                    setUser(updatedUser);
+                    localStorage.setItem('stylevision_current_user', JSON.stringify(updatedUser));
+                }
+                alert(`Оплата прошла успешно! AI+ режим активирован до ${new Date(expiresIso).toLocaleDateString()}`);
+                setShowPaymentModal(false);
+                setIsPro(true);
             }
-
-            alert(`Оплата прошла успешно! AI+ режим активирован до ${new Date(expiresIso).toLocaleDateString()}`);
-            setShowPaymentModal(false);
+            localStorage.removeItem('pending_payment_id');
+        } else {
+            setIsPro(proStatus);
         }
-        localStorage.removeItem('pending_payment_id');
+    } catch (e) {
+        console.error("Failed to load user extra data", e);
     }
-    
-    setIsPro(proStatus);
   };
 
   const checkLimit = async (): Promise<boolean> => {
@@ -530,13 +571,15 @@ const App: React.FC = () => {
       }
   };
 
-  // 1. Loading
-  if (isAuthChecking) {
-    return (
-        <div className="min-h-screen bg-[#050505] text-neutral-300 font-sans flex flex-col pb-20 md:pb-12">
-            <div className="animate-spin w-8 h-8 border-t-2 border-amber-500 rounded-full mx-auto mt-[45vh]"></div>
-        </div>
-    );
+  // 1. Loading Screen (Replaces old spinner)
+  if (isLoading) {
+      return (
+          <LoadingScreen 
+            progress={loadingProgress} 
+            error={initError} 
+            onRetry={handleRetryInit}
+          />
+      );
   }
 
   // 2. Login

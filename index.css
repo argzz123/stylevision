@@ -1,0 +1,53 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Base styles */
+@layer base {
+  html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+  }
+  
+  body {
+    @apply bg-[#050505] text-[#e5e5e5] antialiased;
+    font-family: 'Manrope', sans-serif;
+  }
+  
+  h1, h2, h3, h4, .font-serif {
+    font-family: 'Playfair Display', serif;
+  }
+  
+  /* Form autofill fix for dark mode */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover, 
+  input:-webkit-autofill:focus, 
+  input:-webkit-autofill:active{
+      -webkit-box-shadow: 0 0 0 30px #0a0a0a inset !important;
+      -webkit-text-fill-color: white !important;
+  }
+}
+
+/* Utilities */
+@layer utilities {
+  .scrollbar-hide {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+      display: none;
+  }
+}
+
+/* Custom Components */
+@layer components {
+  .toggle-checkbox:checked {
+    right: 0;
+    border-color: #d97706;
+  }
+  .toggle-checkbox:checked + .toggle-label {
+    background-color: #d97706;
+  }
+}

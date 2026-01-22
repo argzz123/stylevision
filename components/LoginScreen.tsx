@@ -10,37 +10,33 @@ interface LoginScreenProps {
 
 const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isOverlay = false, onCancel }) => {
   const [mockName, setMockName] = useState('');
-  const [showWwwWarning, setShowWwwWarning] = useState(false);
   const telegramWrapperRef = useRef<HTMLDivElement>(null);
   
   // Checkbox states
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const [showAgreementError, setShowAgreementError] = useState(false);
-  
-  // Modal states - Kept for fallback or if needed, but not used in primary flow now
-  const [showTermsModal, setShowTermsModal] = useState(false);
-  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
-
-  const loadWidget = () => {
-     if (!telegramWrapperRef.current) return;
-     telegramWrapperRef.current.innerHTML = '';
-     const script = document.createElement('script');
-     script.src = "https://telegram.org/js/telegram-widget.js?22";
-     script.setAttribute('data-telegram-login', 'stylevision_bot'); 
-     script.setAttribute('data-size', 'large');
-     script.setAttribute('data-radius', '12');
-     script.setAttribute('data-onauth', 'onTelegramAuth(user)');
-     script.async = true;
-     telegramWrapperRef.current.appendChild(script);
-  };
 
   useEffect(() => {
-    const hostname = window.location.hostname;
-    if (hostname.startsWith('www.')) setShowWwwWarning(true);
+    // Clean container first
+    if (telegramWrapperRef.current) {
+        telegramWrapperRef.current.innerHTML = '';
+    }
+
+    const loadWidget = () => {
+         if (!telegramWrapperRef.current) return;
+         
+         const script = document.createElement('script');
+         script.src = "https://telegram.org/js/telegram-widget.js?22";
+         script.setAttribute('data-telegram-login', 'stylevision_bot'); 
+         script.setAttribute('data-size', 'large');
+         script.setAttribute('data-radius', '12');
+         script.setAttribute('data-onauth', 'onTelegramAuth(user)');
+         script.async = true;
+         telegramWrapperRef.current.appendChild(script);
+    };
 
     (window as any).onTelegramAuth = (user: any) => {
-      // Validation Check inside callback
       if (!(document.getElementById('check_terms') as HTMLInputElement)?.checked || 
           !(document.getElementById('check_privacy') as HTMLInputElement)?.checked) {
           setShowAgreementError(true);
@@ -54,15 +50,14 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isOverlay = false, o
         username: user.username,
         photo_url: user.photo_url,
         isGuest: false,
-        termsAcceptedAt: new Date().toISOString() // Save timestamp
+        termsAcceptedAt: new Date().toISOString()
       });
     };
 
     loadWidget();
 
     return () => {
-        delete (window as any).onTelegramAuth;
-        if (telegramWrapperRef.current) telegramWrapperRef.current.innerHTML = '';
+        // Optional cleanup
     };
   }, [onLogin]);
 
@@ -101,7 +96,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isOverlay = false, o
 
   const containerClasses = isOverlay 
     ? "fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex flex-col items-center justify-center p-4"
-    : "min-h-screen bg-[#050505] flex flex-col items-center justify-center p-4 relative overflow-hidden";
+    : "min-h-screen w-full bg-[#050505] flex flex-col items-center justify-center p-4 relative overflow-hidden";
 
   const renderCheckbox = (id: string, checked: boolean, setter: (v: boolean) => void, label: React.ReactNode) => (
       <div className="flex items-start gap-3">
@@ -118,7 +113,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isOverlay = false, o
                     ${showAgreementError && !checked ? 'border-red-500' : 'border-neutral-700'}
                 `} 
             />
-            {/* Custom checkmark SVG for consistent look */}
             <svg className={`
                 absolute top-0.5 left-0 w-5 h-5 pointer-events-none text-black transition-opacity z-20 p-0.5
                 ${checked ? 'opacity-100' : 'opacity-0'}
@@ -135,32 +129,12 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isOverlay = false, o
   return (
     <div className={containerClasses}>
       {!isOverlay && (
-        <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0">
+        <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0 pointer-events-none">
             <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-amber-900/10 rounded-full blur-[120px]"></div>
             <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-blue-900/10 rounded-full blur-[120px]"></div>
         </div>
       )}
       
-      {/* TERMS MODAL (Hidden, kept as fallback logic structure only if needed later) */}
-      {showTermsModal && (
-          <div className="fixed inset-0 z-[150] bg-black/95 flex items-center justify-center p-4">
-              <div className="bg-[#111] border border-neutral-800 rounded-xl p-6 max-w-lg w-full max-h-[80vh] overflow-y-auto">
-                  <h3 className="text-xl font-bold text-white mb-4">Пользовательское соглашение</h3>
-                  <button onClick={() => setShowTermsModal(false)} className="mt-6 w-full bg-amber-600 text-black font-bold py-3 rounded">Закрыть</button>
-              </div>
-          </div>
-      )}
-
-      {/* PRIVACY MODAL (Hidden) */}
-      {showPrivacyModal && (
-          <div className="fixed inset-0 z-[150] bg-black/95 flex items-center justify-center p-4">
-              <div className="bg-[#111] border border-neutral-800 rounded-xl p-6 max-w-lg w-full max-h-[80vh] overflow-y-auto">
-                  <h3 className="text-xl font-bold text-white mb-4">Политика конфиденциальности</h3>
-                  <button onClick={() => setShowPrivacyModal(false)} className="mt-6 w-full bg-amber-600 text-black font-bold py-3 rounded">Закрыть</button>
-              </div>
-          </div>
-      )}
-
       <div className="relative z-10 w-full max-w-md animate-fade-in-up">
          {!isOverlay && (
              <div className="text-center mb-10">
@@ -189,38 +163,18 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isOverlay = false, o
             
             <div className={`space-y-6 mt-6`}>
                
-               {/* Telegram Widget */}
+               {/* Login Widget */}
                <div className="relative">
-                   {/* Overlay to catch clicks when agreements are not checked */}
                    {!areCheckboxesChecked && (
-                       <div 
-                           className="absolute inset-0 z-20 cursor-pointer" 
-                           onClick={handleOverlayClick}
-                       ></div>
+                       <div className="absolute inset-0 z-20 cursor-pointer" onClick={handleOverlayClick}></div>
                    )}
+                   
                    <div className="flex flex-col items-center justify-center min-h-[50px] bg-white/5 rounded-lg p-4 relative transition-colors">
                       <div ref={telegramWrapperRef} className="flex justify-center w-full min-h-[40px] z-10 relative"></div>
                    </div>
                </div>
-               
-               {/* Help / Error Message */}
-               <div className="bg-amber-900/10 border border-amber-900/30 p-4 rounded text-xs text-neutral-400 text-center">
-                  <p className="text-white font-bold mb-2">Не получается войти?</p>
-                  <p className="leading-relaxed opacity-80 mb-3">
-                     Если кнопка не работает или не появляется, перейдите напрямую в нашего бота:
-                  </p>
-                  <a 
-                    href="https://t.me/stylevision_bot" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 bg-[#2AABEE] text-white px-4 py-2 rounded-full font-bold hover:bg-[#229ED9] transition-colors"
-                  >
-                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
-                    Перейти в @stylevision_bot
-                  </a>
-               </div>
 
-               {/* Legal Checkboxes (Updated with direct links) */}
+               {/* Legal Checkboxes */}
                <div className={`space-y-3 p-4 rounded-lg border transition-all ${showAgreementError ? 'bg-red-900/10 border-red-500/50' : 'bg-neutral-900/50 border-neutral-800'}`}>
                    {showAgreementError && (
                        <div className="text-center mb-3">
@@ -262,7 +216,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isOverlay = false, o
                             value={mockName}
                             onChange={(e) => setMockName(e.target.value)}
                             placeholder="Ваше имя"
-                            // Removed 'disabled' prop to allow clicking to trigger validation feedback
                             className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-4 py-3 text-white placeholder-neutral-600 focus:border-amber-600 focus:outline-none transition-colors"
                           />
                           <button 
