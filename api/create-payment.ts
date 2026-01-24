@@ -15,7 +15,7 @@ export default async function handler(req, res) {
 
   // Настройки магазина
   const SHOP_ID = '1254700';
-  const SECRET_KEY = 'test_iCFbKUwMgGqxOuPZ23LbXv--BPh8oDZEG_UJ2wCLHaw';
+  const SECRET_KEY = 'live_knC5pIMu9fCBWGABTJOXCGtlrZdpGldHJAMrlT6xcsI';
 
   if (req.method !== 'POST') {
      return res.status(405).json({ error: 'Method Not Allowed' });
