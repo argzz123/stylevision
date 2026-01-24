@@ -1,5 +1,5 @@
 
-import { TelegramUser, HistoryItem, WardrobeItem, UserProfilePreferences } from '../types';
+import { TelegramUser, HistoryItem } from '../types';
 import { supabase } from './supabaseClient';
 
 // Fallback to localStorage if Supabase fails or keys are missing
@@ -46,7 +46,7 @@ const base64ToBlob = (base64: string): Blob | null => {
 };
 
 // Helper: Upload image to Supabase Storage and get URL
-export const uploadImageToStorage = async (userId: number, base64Image: string | null, type: 'orig' | 'res' | 'wardrobe'): Promise<string | null> => {
+const uploadImageToStorage = async (userId: number, base64Image: string | null, type: 'orig' | 'res'): Promise<string | null> => {
     // 1. If it's already a URL (starts with http) or null, return as is
     if (!base64Image || base64Image.startsWith('http')) {
         return base64Image; 
@@ -282,93 +282,6 @@ export const storageService = {
     } catch (e) {
       return 0; 
     }
-  },
-
-  // --- WARDROBE ---
-  saveWardrobeItem: async (userId: number, item: WardrobeItem) => {
-      try {
-          const imageUrl = await uploadImageToStorage(userId, item.imageUrl, 'wardrobe');
-          
-          const { error } = await supabase
-              .from('wardrobe')
-              .insert({
-                  user_id: userId,
-                  image_url: imageUrl || '',
-                  category: item.category,
-                  created_at: item.createdAt
-              });
-          
-          if (error) throw error;
-      } catch (e) {
-          console.error("Save Wardrobe Failed:", e);
-          const key = `${STORAGE_PREFIX}wardrobe_${userId}`;
-          const current = JSON.parse(localStorage.getItem(key) || '[]');
-          localStorage.setItem(key, JSON.stringify([...current, item]));
-      }
-  },
-
-  getWardrobe: async (userId: number): Promise<WardrobeItem[]> => {
-      try {
-          const { data, error } = await supabase
-              .from('wardrobe')
-              .select('*')
-              .eq('user_id', userId)
-              .order('created_at', { ascending: false });
-
-          if (error) throw error;
-          
-          return data.map((d: any) => ({
-              id: d.id,
-              imageUrl: d.image_url,
-              category: d.category,
-              createdAt: d.created_at
-          }));
-      } catch (e) {
-          const key = `${STORAGE_PREFIX}wardrobe_${userId}`;
-          return JSON.parse(localStorage.getItem(key) || '[]');
-      }
-  },
-
-  deleteWardrobeItem: async (userId: number, itemId: string) => {
-      try {
-          const { error } = await supabase
-              .from('wardrobe')
-              .delete()
-              .eq('id', itemId)
-              .eq('user_id', userId);
-          if (error) throw error;
-      } catch (e) {
-           const key = `${STORAGE_PREFIX}wardrobe_${userId}`;
-           const current = JSON.parse(localStorage.getItem(key) || '[]');
-           localStorage.setItem(key, JSON.stringify(current.filter((i: any) => i.id !== itemId)));
-      }
-  },
-
-  // --- USER PREFERENCES ---
-  savePreferences: async (userId: number, prefs: UserProfilePreferences) => {
-      try {
-          // Since we don't have a separate table, we'll store this in the 'users' table 
-          // in a jsonb column called 'metadata' or 'preferences' if it existed, 
-          // OR reusing the `last_name` hack for now if schema is rigid, 
-          // BUT better to just use local storage for this specific feature if DB schema isn't modifiable by the AI.
-          // Assuming we can use a new table or just Local Storage for safety as per instructions "Do not break".
-          // We will use LocalStorage + try to sync to a hypothetical 'preferences' column or table.
-          
-          // Strategy: Use Local Storage primarily for speed and safety in this refactor.
-          localStorage.setItem(`${STORAGE_PREFIX}prefs_${userId}`, JSON.stringify(prefs));
-          
-          // Try to sync to DB 'users' table metadata if possible (optional)
-          // Skipping complex DB schema migrations to ensure stability.
-      } catch (e) {
-          console.error(e);
-      }
-  },
-
-  getPreferences: async (userId: number): Promise<UserProfilePreferences> => {
-      const defaultPrefs: UserProfilePreferences = { taboos: '', favoriteStyles: '' };
-      const local = localStorage.getItem(`${STORAGE_PREFIX}prefs_${userId}`);
-      if (local) return JSON.parse(local);
-      return defaultPrefs;
   },
 
   // --- GLOBAL SYSTEM CONFIG ---

@@ -69,7 +69,7 @@ export interface HistoryItem {
 }
 
 // Mobile Tab State
-export type MobileTab = 'STUDIO' | 'WARDROBE' | 'PROFILE';
+export type MobileTab = 'STUDIO' | 'COLLECTION';
 
 export interface ChatMessage {
   role: 'user' | 'model';
@@ -86,20 +86,4 @@ export interface TelegramUser {
   isGuest?: boolean;
   termsAcceptedAt?: string; // ISO Date string of when terms were accepted
   subscriptionExpiresAt?: string; // ISO Date string for subscription expiration
-}
-
-// --- NEW TYPES FOR UPDATE ---
-
-export type WardrobeCategory = 'TOP' | 'BOTTOM' | 'SHOES' | 'DRESS' | 'OUTERWEAR' | 'ACCESSORY';
-
-export interface WardrobeItem {
-  id: string;
-  imageUrl: string;
-  category: WardrobeCategory;
-  createdAt: string;
-}
-
-export interface UserProfilePreferences {
-  favoriteStyles: string;
-  taboos: string; // What to avoid
 }

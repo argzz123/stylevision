@@ -1,55 +1,22 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { analyzeUserImage, getStyleRecommendations, editUserImage, compressImage, tryOnWardrobeItems, IS_DEMO_MODE } from './services/geminiService';
+import { analyzeUserImage, getStyleRecommendations, editUserImage, IS_DEMO_MODE } from './services/geminiService';
 import { createPayment, PaymentResponse, checkPaymentStatus } from './services/paymentService';
 import { storageService, GlobalConfig } from './services/storageService'; 
-import { AppState, UserAnalysis, StyleRecommendation, AnalysisMode, Store, Season, Occasion, HistoryItem, MobileTab, TelegramUser, WardrobeItem, WardrobeCategory, UserProfilePreferences } from './types';
+import { AppState, UserAnalysis, StyleRecommendation, AnalysisMode, Store, Season, Occasion, HistoryItem, MobileTab, TelegramUser } from './types';
 import StyleCard from './components/StyleCard';
 import BeforeAfterSlider from './components/BeforeAfterSlider';
 import LoginScreen from './components/LoginScreen';
-import LoadingScreen from './components/LoadingScreen'; 
+import LoadingScreen from './components/LoadingScreen'; // New Import
 import AdminPanel from './components/AdminPanel';
 import ImageEditor from './components/ImageEditor';
-import { triggerHaptic } from './utils/haptics'; 
+import { triggerHaptic } from './utils/haptics'; // Haptics Import
 
 // ADMIN ID CONSTANT (Array)
 const ADMIN_IDS = [643780299, 1613288376];
-const MODERATOR_ID = 999999; 
+const MODERATOR_ID = 999999; // Special ID used in LoginScreen for moderator
 
-const FREE_LIMIT = 2; 
-
-// --- REFINED ICONS ---
-
-const IconStudio = ({ className, filled }: { className?: string, filled?: boolean }) => (
-    <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12 2L12 4M12 20L12 22M4 12L2 12M22 12L20 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-        <path d="M19.07 4.93L17.66 6.34M6.34 17.66L4.93 19.07M19.07 19.07L17.66 17.66M6.34 6.34L4.93 4.93" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-        {/* Hanger Shape */}
-        <path d="M12 7C12 7 7 10 7 13C7 15 9 17 12 17C15 17 17 15 17 13C17 10 12 7 12 7Z" stroke="currentColor" strokeWidth="1.5" fill={filled ? "currentColor" : "none"} />
-        <path d="M12 7V5C12 5 12 4 13 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-    </svg>
-);
-
-const IconWardrobe = ({ className, filled }: { className?: string, filled?: boolean }) => (
-    <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        {/* Cabinet Frame */}
-        <rect x="4" y="3" width="16" height="18" rx="1" stroke="currentColor" strokeWidth="1.5" />
-        {/* Center Line */}
-        <path d="M12 3V21" stroke="currentColor" strokeWidth="1.5" />
-        {/* Handles */}
-        <circle cx="10" cy="12" r="1" fill={filled ? "currentColor" : "currentColor"} />
-        <circle cx="14" cy="12" r="1" fill={filled ? "currentColor" : "currentColor"} />
-        {/* Legs */}
-        <path d="M5 21V23M19 21V23" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-    </svg>
-);
-
-const IconProfile = ({ className, filled }: { className?: string, filled?: boolean }) => (
-    <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="1.5" fill={filled ? "currentColor" : "none"} />
-        <path d="M4 20C4 16 8 15 12 15C16 15 20 16 20 20" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
-);
+const FREE_LIMIT = 2; // Max generations per 5 hours
 
 // SUBSCRIPTION PLANS CONFIGURATION
 interface SubscriptionPlan {
@@ -86,6 +53,7 @@ const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   }
 ];
 
+// Configuration for available stores
 const INITIAL_STORES: Store[] = [
   { id: 'lamoda', name: 'Lamoda', domain: 'lamoda.ru', logoUrl: 'https://logo-teka.com/wp-content/uploads/2025/07/lamoda-icon-logo.svg', isSelected: true },
   { id: 'ozon', name: 'Ozon', domain: 'ozon.ru', logoUrl: 'https://logo-teka.com/wp-content/uploads/2025/06/ozon-icon-logo.svg', isSelected: true },
@@ -99,9 +67,6 @@ const INITIAL_STORES: Store[] = [
 ];
 
 const App: React.FC = () => {
-  // Navigation State
-  const [activeTab, setActiveTab] = useState<MobileTab>('STUDIO');
-
   // Loading & Init State
   const [isLoading, setIsLoading] = useState(true);
   const [loadingProgress, setLoadingProgress] = useState(0);
@@ -111,14 +76,14 @@ const App: React.FC = () => {
   // Auth State
   const [user, setUser] = useState<TelegramUser | null>(null);
 
-  // App Flow State (Studio)
+  // App Flow State
   const [appState, setAppState] = useState<AppState>(AppState.UPLOAD);
-  const [setupStep, setSetupStep] = useState<number>(0); // 0: Choice, 1: AI Setup, 2: Stores/Config, 3: Wardrobe Select
+  const [setupStep, setSetupStep] = useState<number>(1);
   const [isPro, setIsPro] = useState(false);
   
   // Config State
   const [globalConfig, setGlobalConfig] = useState<GlobalConfig>({ 
-      price: "490.00", 
+      price: "490.00", // Default display price
       productTitle: "StyleVision AI+", 
       productDescription: "",
       maintenanceMode: false
@@ -130,6 +95,7 @@ const App: React.FC = () => {
   const [showAdminPanel, setShowAdminPanel] = useState(false); 
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [showGuestLockModal, setShowGuestLockModal] = useState(false);
+  const [showProInfoModal, setShowProInfoModal] = useState(false);
   
   // Payment Pending Logic
   const [pendingPaymentId, setPendingPaymentId] = useState<string | null>(null);
@@ -137,7 +103,7 @@ const App: React.FC = () => {
   const [isPollingPayment, setIsPollingPayment] = useState(false);
   const paymentPollInterval = useRef<any>(null);
 
-  // Data State (Studio)
+  // Data State
   const [originalImage, setOriginalImage] = useState<string | null>(null);
   const [currentImage, setCurrentImage] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<UserAnalysis | null>(null);
@@ -146,32 +112,34 @@ const App: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingMessage, setProcessingMessage] = useState('');
   
-  // Settings State (Studio)
+  // Settings State
   const [analysisMode, setAnalysisMode] = useState<AnalysisMode>('STANDARD');
   const [showObjectiveWarning, setShowObjectiveWarning] = useState(false);
   const [stores, setStores] = useState<Store[]>(INITIAL_STORES);
   const [selectedSeason, setSelectedSeason] = useState<Season>('ANY');
   const [selectedOccasion, setSelectedOccasion] = useState<Occasion>('CASUAL');
 
-  // New Data States
+  // History State
+  const [showHistory, setShowHistory] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [wardrobe, setWardrobe] = useState<WardrobeItem[]>([]);
-  const [selectedWardrobeItems, setSelectedWardrobeItems] = useState<string[]>([]);
-  const [userPreferences, setUserPreferences] = useState<UserProfilePreferences>({ taboos: '', favoriteStyles: '' });
+  
+  // Editing State
+  const [editPrompt, setEditPrompt] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const wardrobeInputRef = useRef<HTMLInputElement>(null);
 
   // Helper: Is Admin?
   const isAdmin = (id: number) => ADMIN_IDS.includes(id);
 
-  // Helper: Download Image
+  // Helper: Download Image (Robust with Context Check)
   const downloadImage = async (dataUrl: string, filename: string) => {
     triggerHaptic('light');
+    // Check if running inside Telegram WebApp
     const tg = (window as any).Telegram?.WebApp;
     const isTelegram = !!tg?.initData;
 
     if (isTelegram) {
+        // STRATEGY FOR TELEGRAM: Open Link Externally
         if (dataUrl.startsWith('http')) {
              tg.openLink(dataUrl);
         } else {
@@ -180,6 +148,7 @@ const App: React.FC = () => {
         return;
     }
 
+    // STRATEGY FOR BROWSER: Force Download via Blob
     try {
        if (dataUrl.startsWith('data:')) {
            const link = document.createElement('a');
@@ -192,12 +161,14 @@ const App: React.FC = () => {
            const response = await fetch(dataUrl);
            const blob = await response.blob();
            const blobUrl = window.URL.createObjectURL(blob);
+           
            const link = document.createElement('a');
            link.href = blobUrl;
            link.download = filename;
            document.body.appendChild(link);
            link.click();
            document.body.removeChild(link);
+           
            window.URL.revokeObjectURL(blobUrl);
        }
     } catch (e) {
@@ -211,11 +182,16 @@ const App: React.FC = () => {
     triggerHaptic('warning');
     if (!user) return;
     if (!window.confirm("Вы уверены, что хотите удалить этот образ?")) return;
+
+    // Optimistic Update
     setHistory(prev => prev.filter(item => item.id !== itemId));
     triggerHaptic('success');
+    
+    // Background Server Delete
     await storageService.deleteHistoryItem(user.id, itemId);
   };
 
+  // --- RETRY LOGIC WRAPPER ---
   const withRetry = async <T,>(fn: () => Promise<T>, attempts: number = 3, baseDelay: number = 1500): Promise<T> => {
       for (let i = 0; i < attempts; i++) {
           try {
@@ -223,8 +199,12 @@ const App: React.FC = () => {
           } catch (error) {
               const isLastAttempt = i === attempts - 1;
               if (isLastAttempt) throw error;
-              const attemptNum = i + 2; 
+              
+              // Update status text
+              const attemptNum = i + 2; // 1st failed, so next is 2
               setLoadingStatusText(`Слабая сеть. Повторное подключение (${attemptNum}/${attempts})...`);
+              
+              // Exponential backoff or step delay
               const delay = baseDelay + (i * 1000); 
               await new Promise(resolve => setTimeout(resolve, delay));
           }
@@ -232,59 +212,91 @@ const App: React.FC = () => {
       throw new Error("Failed after retries");
   };
 
+  // --- OPTIMIZED INITIALIZATION LOGIC ---
   useEffect(() => {
     const initApp = async () => {
         try {
+            // Fake progress ticker to make UI feel alive
             const progressInterval = setInterval(() => {
                 setLoadingProgress(prev => Math.min(prev + (Math.random() * 2), 90));
             }, 100);
 
+            // Step 1: Telegram WebApp Setup (Early check)
             const tg = (window as any).Telegram?.WebApp;
+            
             if (tg) {
+                // Expand immediately to prevent white gaps
                 tg.expand();
+                
+                // Safe header color setting (check version)
                 if (tg.isVersionAtLeast && tg.isVersionAtLeast('6.1')) {
                     tg.setHeaderColor('#050505');
                     tg.setBackgroundColor('#050505');
                 }
+                
+                // Signal ready immediately to avoid timeouts
                 tg.ready();
             }
             
+            // Step 2: Fetch Critical Data with Auto-Retry
             setLoadingStatusText("Настраиваем AI стилиста...");
+            
             const config = await withRetry(() => storageService.getGlobalConfig());
             setGlobalConfig(config);
-            setLoadingProgress(50);
+            
+            setLoadingProgress(50); // Milestone
 
+            // Step 3: Auth & User Data
             let currentUser: TelegramUser | null = null;
+            
+            // Check Telegram Auth First
             if (tg && tg.initDataUnsafe?.user) {
                 const tgUser = tg.initDataUnsafe.user;
+                
+                // Fetch User Data with Retry
                 const dbUser = await withRetry(() => storageService.getUser(tgUser.id));
+                
                 currentUser = {
                     ...tgUser,
                     isGuest: false,
                     subscriptionExpiresAt: dbUser?.subscriptionExpiresAt
                 };
+                
+                // Sync to DB in background (no retry needed, non-blocking)
                 storageService.saveUser(currentUser!); 
-            } else {
+            } 
+            // Fallback to LocalStorage
+            else {
                 const storedUser = localStorage.getItem('stylevision_current_user');
                 if (storedUser) {
                     try {
                         const parsedUser = JSON.parse(storedUser);
+                        // Refresh from DB with retry
                         const dbUser = await withRetry(() => storageService.getUser(parsedUser.id));
                         currentUser = { ...parsedUser, ...dbUser };
+                        
                         storageService.saveUser(currentUser!);
-                    } catch (e) { console.warn("Invalid local user data"); }
+                    } catch (e) {
+                         console.warn("Invalid local user data");
+                    }
                 }
             }
 
             if (currentUser) {
                  setUser(currentUser);
                  localStorage.setItem('stylevision_current_user', JSON.stringify(currentUser));
+                 // Load history and pro status with retry
                  await withRetry(() => loadUserData(currentUser!.id)); 
             }
 
+            // Step 4: Finalize
             clearInterval(progressInterval);
             setLoadingProgress(100);
-            setTimeout(() => { setIsLoading(false); }, 600);
+            
+            // Artificial small delay to let the 100% bar render
+            setTimeout(() => {
+                setIsLoading(false);
+            }, 600);
 
         } catch (error: any) {
             console.error("Initialization Failed:", error);
@@ -301,6 +313,7 @@ const App: React.FC = () => {
       setLoadingProgress(0);
       setLoadingStatusText("Настраиваем AI стилиста...");
       setIsLoading(true);
+      // Simply reload the window to restart the lifecycle
       window.location.reload();
   };
 
@@ -320,12 +333,14 @@ const App: React.FC = () => {
      setShowPaymentModal(true);
   }, []);
 
+  // Poll for payment success when pendingPaymentId is set
   useEffect(() => {
     if (!pendingPaymentId) {
         if (paymentPollInterval.current) clearInterval(paymentPollInterval.current);
         setIsPollingPayment(false);
         return;
     }
+
     setIsPollingPayment(true);
     paymentPollInterval.current = setInterval(async () => {
         try {
@@ -333,16 +348,21 @@ const App: React.FC = () => {
             if (isPaid) {
                 await processSuccessfulPayment(pendingPaymentId);
             }
-        } catch (e) { console.error("Poll failed", e); }
-    }, 3000);
+        } catch (e) {
+            console.error("Poll failed", e);
+        }
+    }, 3000); // Check every 3 seconds
+
     return () => clearInterval(paymentPollInterval.current);
   }, [pendingPaymentId]);
 
   const processSuccessfulPayment = async (paymentId: string) => {
       if (!user) return;
       clearInterval(paymentPollInterval.current);
+      
       triggerHaptic('success');
       
+      // Retrieve pending months from local storage (or default to 1)
       const storedMonths = localStorage.getItem('pending_payment_months');
       const monthsToAdd = storedMonths ? parseInt(storedMonths, 10) : 1;
 
@@ -367,20 +387,19 @@ const App: React.FC = () => {
 
   const loadUserData = async (userId: number) => {
     try {
-        const [savedHistory, proStatus, savedWardrobe, savedPrefs] = await Promise.all([
+        const [savedHistory, proStatus] = await Promise.all([
             storageService.getHistory(userId),
-            storageService.getProStatus(userId),
-            storageService.getWardrobe(userId),
-            storageService.getPreferences(userId)
+            storageService.getProStatus(userId)
         ]);
         
         setHistory(savedHistory);
-        setWardrobe(savedWardrobe);
-        setUserPreferences(savedPrefs);
 
+        // Check if there was a pending payment from a reload
         const storedPendingId = localStorage.getItem('pending_payment_id');
         if (storedPendingId) {
             setPendingPaymentId(storedPendingId);
+            // It will automatically be picked up by the useEffect above
+            // But we also do an immediate check
             const isPaid = await checkPaymentStatus(storedPendingId);
             if (isPaid) {
                 processSuccessfulPayment(storedPendingId);
@@ -395,7 +414,10 @@ const App: React.FC = () => {
 
   const checkLimit = async (): Promise<boolean> => {
      if (!user) return false;
+     
+     // Note: Moderator will hit this limit just like a normal user to test payment
      if (isPro) return true;
+
      const count = await storageService.getRecentGenerationsCount(user.id, 5); 
      if (count >= FREE_LIMIT) {
          triggerHaptic('warning');
@@ -407,6 +429,7 @@ const App: React.FC = () => {
 
   const saveToHistory = async (img: string, styleName: string) => {
     if (!originalImage || !analysis || !user) return;
+    
     try {
         const newItem: HistoryItem = {
           id: Date.now().toString(),
@@ -417,9 +440,13 @@ const App: React.FC = () => {
           analysis: analysis, 
           recommendations: recommendations
         };
+
         setHistory(prev => [newItem, ...prev].slice(0, 20));
         await storageService.saveHistoryItem(user.id, newItem);
-    } catch (err) { console.error("Error saving history:", err); }
+
+    } catch (err) {
+        console.error("Error saving history:", err);
+    }
   };
 
   const loadFromHistory = (item: HistoryItem) => {
@@ -427,8 +454,9 @@ const App: React.FC = () => {
      setOriginalImage(item.originalImage);
      setCurrentImage(item.resultImage);
      setAppState(AppState.RESULTS);
-     setActiveTab('STUDIO'); // Switch to Studio tab
-     setSetupStep(0); 
+     setShowHistory(false);
+     setSetupStep(1); 
+     
      if (item.analysis) setAnalysis(item.analysis);
      if (item.recommendations) {
         setRecommendations(item.recommendations);
@@ -438,7 +466,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     window.scrollTo(0, 0);
-  }, [appState, setupStep, activeTab]);
+  }, [appState, setupStep]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -450,45 +478,11 @@ const App: React.FC = () => {
         setOriginalImage(base64);
         setCurrentImage(base64);
         setAppState(AppState.PREVIEW);
-        setSetupStep(0); // Reset to Choice Screen
+        setSetupStep(1);
         setAnalysisMode('STANDARD');
-        setSelectedWardrobeItems([]);
       };
       reader.readAsDataURL(file);
     }
-  };
-
-  // Wardrobe Image Upload with Compression
-  const handleWardrobeUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (file && user) {
-          triggerHaptic('light');
-          const reader = new FileReader();
-          reader.onloadend = async () => {
-              const base64 = reader.result as string;
-              // Compress to avoid lag and save space
-              const compressedBase64 = await compressImage(base64, 800, 0.75);
-
-              // Default category TOP, can be changed later or via prompt
-              const newItem: WardrobeItem = {
-                  id: Date.now().toString(),
-                  imageUrl: compressedBase64,
-                  category: 'TOP',
-                  createdAt: new Date().toISOString()
-              };
-              setWardrobe(prev => [newItem, ...prev]);
-              await storageService.saveWardrobeItem(user.id, newItem);
-          };
-          reader.readAsDataURL(file);
-      }
-  };
-  
-  const handleDeleteWardrobeItem = async (e: React.MouseEvent, itemId: string) => {
-      e.stopPropagation();
-      if (!user) return;
-      if (!window.confirm("Удалить вещь?")) return;
-      setWardrobe(prev => prev.filter(i => i.id !== itemId));
-      await storageService.deleteWardrobeItem(user.id, itemId);
   };
 
   const handleModeChange = (mode: AnalysisMode) => {
@@ -522,31 +516,46 @@ const App: React.FC = () => {
         setShowAuthRequest(true);
         return;
     }
+
     try {
         setIsProcessing(true);
         setProcessingMessage('Соединение с ЮKassa...');
+        
         const description = `Подписка StyleVision AI+ (${plan.label})`;
         const payment = await createPayment(plan.price.toFixed(2), description);
+        
         if (payment.confirmation && payment.confirmation.confirmation_url) {
             const paymentUrl = payment.confirmation.confirmation_url;
+            
+            // Save pending ID and PLAN DURATION
             if (payment.id) {
                 localStorage.setItem('pending_payment_id', payment.id);
                 localStorage.setItem('pending_payment_months', String(plan.months));
                 setPendingPaymentId(payment.id);
             }
+
+            // Check if inside Telegram
             const tg = (window as any).Telegram?.WebApp;
-            if (tg?.initData) {
+            const isTelegram = !!tg?.initData;
+
+            if (isTelegram) {
+                // Open in External Browser to allow deep links (SberPay, etc)
                 tg.openLink(paymentUrl, { try_instant_view: false });
             } else {
+                // Standard browser redirect
                 window.location.href = paymentUrl;
             }
-        } else { throw new Error("Не получена ссылка на оплату"); }
+        } else {
+             throw new Error("Не получена ссылка на оплату");
+        }
     } catch (e: any) {
         console.error(e);
         triggerHaptic('error');
         alert(`Ошибка оплаты: ${e.message}.`);
         setPendingPaymentId(null);
-    } finally { setIsProcessing(false); }
+    } finally {
+        setIsProcessing(false);
+    }
   };
 
   const performAnalysis = async () => {
@@ -555,11 +564,13 @@ const App: React.FC = () => {
          setShowGuestLockModal(true);
          return;
      }
+
      try {
       triggerHaptic('medium');
       setAppState(AppState.ANALYZING);
       setIsProcessing(true);
       setProcessingMessage('Анализируем ваш профиль...');
+      
       const analysisResult = await analyzeUserImage(
           originalImage!, 
           analysisMode,
@@ -567,16 +578,21 @@ const App: React.FC = () => {
       );
       setAnalysis(analysisResult);
       triggerHaptic('success');
+      
       setProcessingMessage(`Ищем образы (${selectedSeason === 'ANY' ? 'база' : selectedSeason})...`);
+      
       const styles = await getStyleRecommendations(
           analysisResult, 
           stores, 
-          { season: selectedSeason, occasion: selectedOccasion },
-          (msg) => setProcessingMessage(msg),
-          userPreferences // Passing new preferences
+          {
+            season: selectedSeason,
+            occasion: selectedOccasion
+          },
+          (msg) => setProcessingMessage(msg)
       );
       setRecommendations(styles);
       if (styles.length > 0) setSelectedStyleId(styles[0].id);
+      
       setAppState(AppState.RESULTS);
       triggerHaptic('success');
     } catch (error: any) {
@@ -584,27 +600,35 @@ const App: React.FC = () => {
       triggerHaptic('error');
       alert(error.message);
       setAppState(AppState.UPLOAD);
-    } finally { setIsProcessing(false); }
+    } finally {
+      setIsProcessing(false);
+    }
   }
 
   const startFlow = () => performAnalysis();
 
   const handleApplyStyle = async (style: StyleRecommendation) => {
     if (!originalImage || !analysis) return;
+    
     if (user?.isGuest) {
         triggerHaptic('warning');
         setShowGuestLockModal(true);
         return;
     }
+
     const canProceed = await checkLimit();
     if (!canProceed) return;
+
     try {
       triggerHaptic('medium');
       setIsProcessing(true);
+      
       const safeTitle = style.title || "Стильный образ";
       setProcessingMessage(`Примеряем образ "${safeTitle}"...`);
+      
       const itemList = (style.items || []).map(item => item.name).join(', ');
       const colors = (style.colorPalette || []).join(', ');
+      
       const prompt = `
         TASK: High-End Photorealistic Virtual Try-On.
         SUBJECT: ${analysis.gender}.
@@ -616,6 +640,7 @@ const App: React.FC = () => {
         1. PRESERVE IDENTITY: Do NOT change the face.
         2. QUALITY: 8k resolution, photorealistic.
       `;
+      
       const newImage = await editUserImage(
           originalImage, 
           prompt, 
@@ -623,93 +648,31 @@ const App: React.FC = () => {
           (msg) => setProcessingMessage(msg)
       );
       setCurrentImage(newImage);
+      
       saveToHistory(newImage, safeTitle);
       triggerHaptic('success');
+
     } catch (error: any) {
       console.error(error);
       triggerHaptic('error');
       alert(error.message);
-    } finally { setIsProcessing(false); }
-  };
-
-  // New Function: Handle "Try On Wardrobe"
-  const handleWardrobeTryOn = async () => {
-      if (!originalImage || selectedWardrobeItems.length === 0) return;
-      if (user?.isGuest) {
-          triggerHaptic('warning');
-          setShowGuestLockModal(true);
-          return;
-      }
-      const canProceed = await checkLimit();
-      if (!canProceed) return;
-
-      try {
-          triggerHaptic('medium');
-          setAppState(AppState.ANALYZING); // Use loading screen
-          setIsProcessing(true);
-          setProcessingMessage('Примеряем выбранные вещи...');
-
-          // Get full base64 for selected items from wardrobe state
-          const itemsToTry = wardrobe
-              .filter(item => selectedWardrobeItems.includes(item.id))
-              .map(item => item.imageUrl);
-
-          // Use the new geminiService function
-          const newImage = await tryOnWardrobeItems(
-              originalImage,
-              itemsToTry,
-              (msg) => setProcessingMessage(msg)
-          );
-
-          setCurrentImage(newImage);
-          
-          // Fake analysis object for consistency in Results view
-          if (!analysis) {
-             setAnalysis({
-                 gender: 'Ваш стиль',
-                 bodyType: 'Персональный',
-                 seasonalColor: 'Гардероб',
-                 styleKeywords: ['Мой Гардероб', 'Примерка'],
-                 detailedDescription: 'Виртуальная примерка вещей из вашего гардероба.'
-             });
-          }
-          setRecommendations([]); // No recommendations for this flow
-          
-          setAppState(AppState.RESULTS);
-          saveToHistory(newImage, "Мой Гардероб (Примерка)");
-          triggerHaptic('success');
-
-      } catch (error: any) {
-          console.error(error);
-          triggerHaptic('error');
-          alert(error.message);
-          setAppState(AppState.PREVIEW); // Go back
-      } finally {
-          setIsProcessing(false);
-      }
-  };
-
-  const toggleWardrobeSelection = (id: string) => {
-      triggerHaptic('selection');
-      setSelectedWardrobeItems(prev => {
-          if (prev.includes(id)) return prev.filter(i => i !== id);
-          if (prev.length >= 10) {
-              alert("Можно выбрать максимум 10 вещей");
-              return prev;
-          }
-          return [...prev, id];
-      });
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleEdit = async (prompt: string, mask?: string) => {
      if (!currentImage || !prompt.trim()) return;
+
      if (user?.isGuest) {
          triggerHaptic('warning');
          setShowGuestLockModal(true);
          return;
      }
+
      const canProceed = await checkLimit();
      if (!canProceed) return;
+
      try {
         triggerHaptic('medium');
         setIsProcessing(true);
@@ -721,24 +684,26 @@ const App: React.FC = () => {
             (msg) => setProcessingMessage(msg)
         );
         setCurrentImage(newImage);
+        
         saveToHistory(newImage, "Edit: " + prompt);
         triggerHaptic('success');
      } catch (err: any) {
         console.error(err);
         triggerHaptic('error');
         alert(err.message);
-     } finally { setIsProcessing(false); }
+     } finally {
+        setIsProcessing(false);
+     }
   }
 
   const resetApp = () => {
     triggerHaptic('light');
     setAppState(AppState.UPLOAD);
-    setSetupStep(0);
+    setSetupStep(1);
     setOriginalImage(null);
     setCurrentImage(null);
     setAnalysis(null);
     setRecommendations([]);
-    setSelectedWardrobeItems([]);
   };
 
   const handleLogout = () => {
@@ -747,19 +712,24 @@ const App: React.FC = () => {
      localStorage.removeItem('stylevision_current_user');
      setAppState(AppState.UPLOAD);
      setHistory([]);
-     setActiveTab('STUDIO');
+     setShowProInfoModal(false); // Close modal if open
   };
 
   const handleGuestToLogin = () => {
       setShowGuestLockModal(false);
       handleLogout();
   };
-
-  const savePreferences = async () => {
-      if (!user) return;
-      triggerHaptic('success');
-      await storageService.savePreferences(user.id, userPreferences);
-      alert('Настройки стиля сохранены!');
+  
+  // Logic for clicking on Profile Button
+  const handleProfileClick = () => {
+      triggerHaptic('light');
+      if (user?.isGuest) {
+          // If Guest -> Logout/Redirect to Login
+          handleLogout();
+      } else {
+          // If User -> Show Info Modal
+          setShowProInfoModal(true);
+      }
   };
 
   const cancelPendingPayment = () => {
@@ -770,8 +740,7 @@ const App: React.FC = () => {
       setShowPaymentModal(false);
   }
 
-  // --- RENDERING ---
-
+  // 1. Loading Screen (Replaces old spinner)
   if (isLoading) {
       return (
           <LoadingScreen 
@@ -783,10 +752,13 @@ const App: React.FC = () => {
       );
   }
 
+  // 2. Login
   if (!user) {
     return <LoginScreen onLogin={handleLogin} />;
   }
 
+  // 3. Maintenance Mode (Block non-admins)
+  // Moderator bypasses maintenance mode to test features
   if (globalConfig.maintenanceMode && !isAdmin(user.id) && user.id !== MODERATOR_ID) {
       return (
           <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center p-6 text-center animate-fade-in">
@@ -803,13 +775,428 @@ const App: React.FC = () => {
       );
   }
 
-  // Navigation Logic
-  const renderStudio = () => (
-    <div className="animate-fade-in">
+  // 4. Main UI
+  return (
+    <div className="min-h-screen bg-[#050505] text-neutral-300 font-sans flex flex-col relative pb-20 md:pb-12 overflow-x-hidden">
+      
+      {/* Header */}
+      <header className="sticky top-0 z-50 backdrop-blur-md bg-black/80 border-b border-neutral-800">
+        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+          
+          <div className="flex items-center gap-4">
+              {/* Logo / Home */}
+              <div className="flex items-center gap-3 cursor-pointer group" onClick={resetApp}>
+                <div className="w-8 h-8 border border-neutral-700 flex items-center justify-center bg-neutral-900">
+                  <span className="font-serif text-xl text-amber-500">S</span>
+                </div>
+                <h1 className="text-xl font-serif text-white tracking-widest hidden md:block">
+                  STYLE<span className="font-sans font-light text-neutral-500 text-sm ml-1">VISION</span>
+                </h1>
+              </div>
+
+              {/* SUBSCRIPTION BUTTON (MOVED TO LEFT) */}
+             {!isPro ? (
+                <button 
+                  onClick={handleBuyProClick}
+                  className="bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-black text-xs font-bold px-4 py-2 rounded-full transition-all shadow-lg shadow-amber-900/20 flex items-center gap-1.5"
+                >
+                    <span className="hidden sm:inline">Купить AI+</span>
+                    <span className="sm:hidden">AI+</span>
+                </button>
+             ) : (
+                <button 
+                  onClick={() => setShowProInfoModal(true)}
+                  className="border border-amber-500/50 bg-transparent hover:bg-amber-900/20 text-amber-500 text-xs font-bold px-4 py-2 rounded-full transition-all flex items-center gap-1.5"
+                >
+                    <span className="hidden sm:inline">AI+ Active</span>
+                    <span className="sm:hidden">AI+</span>
+                </button>
+             )}
+          </div>
+          
+          <div className="flex items-center gap-4">
+             
+             {appState !== AppState.UPLOAD && (
+                 <button 
+                    onClick={resetApp}
+                    className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-neutral-400 hover:text-white transition-colors border border-neutral-800 rounded-full px-3 py-1.5 bg-neutral-900/50"
+                 >
+                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
+                     <span className="hidden sm:inline">На Главную</span>
+                 </button>
+             )}
+
+             {isAdmin(user.id) && (
+                <button 
+                  onClick={() => setShowAdminPanel(true)}
+                  className="bg-red-900/20 border border-red-900 text-red-500 text-xs font-bold px-3 py-1 rounded hover:bg-red-900/40 transition-colors"
+                >
+                  ADMIN
+                </button>
+             )}
+
+             {/* PROFILE BUTTON - NOW USES handleProfileClick */}
+             <div 
+                onClick={handleProfileClick}
+                className={`hidden md:flex cursor-pointer items-center gap-2 text-xs border border-neutral-800 rounded-full px-3 py-1 bg-neutral-900 hover:bg-neutral-800 transition-all group ${user.isGuest ? 'text-neutral-500 hover:border-red-900/30' : 'text-amber-500 border-amber-900/30 hover:border-amber-500'}`}
+                title={user.isGuest ? "Нажмите чтобы войти" : "Профиль"}
+             >
+                <span className={`w-2 h-2 rounded-full ${user.isGuest ? 'bg-neutral-500' : 'bg-green-500'}`}></span>
+                {user.username || user.first_name}
+             </div>
+             
+             <button onClick={() => { setShowHistory(true); triggerHaptic('light'); }} className="text-neutral-400 hover:text-white flex items-center gap-2">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>
+                <span className="hidden md:inline text-xs uppercase font-bold">Гардероб</span>
+             </button>
+          </div>
+        </div>
+      </header>
+
+      {/* ADMIN PANEL OVERLAY */}
+      {showAdminPanel && isAdmin(user.id) && (
+         <AdminPanel onClose={() => setShowAdminPanel(false)} currentUserId={user.id} />
+      )}
+
+      {/* SUBSCRIPTION INFO MODAL (PROFILE INFO) */}
+      {showProInfoModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in">
+             <div className="relative w-full max-w-sm bg-[#0a0a0a] border border-neutral-800 rounded-2xl p-8 shadow-2xl overflow-hidden text-center">
+                <button onClick={() => setShowProInfoModal(false)} className="absolute top-4 right-4 text-neutral-500 hover:text-white">
+                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+                
+                {/* Profile Avatar Placeholder */}
+                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center overflow-hidden">
+                    {user.photo_url ? (
+                        <img src={user.photo_url} alt="Profile" className="w-full h-full object-cover" />
+                    ) : (
+                        <span className="text-2xl">👤</span>
+                    )}
+                </div>
+                
+                <h2 className="text-xl font-bold text-white mb-1">{user.first_name}</h2>
+                <p className="text-xs text-neutral-500 mb-6">@{user.username || 'user'}</p>
+
+                {/* Status Section */}
+                {isPro ? (
+                    <div className="bg-amber-900/10 border border-amber-500/30 rounded-xl p-4 mb-6">
+                        <div className="flex items-center justify-center gap-2 mb-2">
+                           <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                           <h3 className="text-amber-500 font-bold uppercase tracking-widest text-xs">AI+ Активен</h3>
+                        </div>
+                        {user?.subscriptionExpiresAt && (
+                           <p className="text-neutral-400 text-xs">
+                              Действует до: <span className="text-white font-medium">{new Date(user.subscriptionExpiresAt).toLocaleDateString()}</span>
+                           </p>
+                        )}
+                    </div>
+                ) : (
+                    <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-4 mb-6">
+                         <h3 className="text-neutral-400 font-bold uppercase tracking-widest text-xs mb-2">Базовый аккаунт</h3>
+                         <p className="text-neutral-500 text-[10px] mb-3">Лимит генераций ограничен</p>
+                         <button 
+                            onClick={() => { setShowProInfoModal(false); handleBuyProClick(); }}
+                            className="w-full bg-amber-600 text-black font-bold py-2 rounded text-xs hover:bg-amber-500 transition-colors"
+                         >
+                            Купить AI+
+                         </button>
+                    </div>
+                )}
+                
+                {/* Mobile Friendly Contact Links inside Modal */}
+                <div className="border-t border-neutral-800 pt-4 text-[10px] text-neutral-500 space-y-2 mb-4">
+                    <div className="flex justify-center gap-4">
+                       <a href="mailto:info@stylevision.fun" className="hover:text-amber-500 flex items-center gap-2 transition-colors">
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                          info@stylevision.fun
+                       </a>
+                       <a href="https://t.me/Nikita_Peredvigin" target="_blank" rel="noopener noreferrer" className="hover:text-amber-500 flex items-center gap-2 transition-colors">
+                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+                          @Nikita_Peredvigin
+                       </a>
+                    </div>
+                    <div className="flex justify-center gap-3">
+                       <a href="https://stylevision.fun/offer.html" target="_blank" className="hover:underline">Оферта</a>
+                       <a href="https://stylevision.fun/privacy.html" target="_blank" className="hover:underline">Конфиденциальность</a>
+                    </div>
+                </div>
+
+                {/* Logout Button */}
+                <button 
+                    onClick={handleLogout} 
+                    className="text-red-500 hover:text-red-400 text-xs font-bold uppercase tracking-wider border border-red-900/30 hover:border-red-600 px-4 py-2 rounded-full transition-all"
+                >
+                    Выйти из аккаунта
+                </button>
+             </div>
+        </div>
+      )}
+
+      {/* GUEST LOCK MODAL */}
+      {showGuestLockModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in">
+             <div className="relative w-full max-w-md bg-[#0a0a0a] border border-amber-900/50 rounded-2xl p-8 shadow-2xl overflow-hidden">
+                <button onClick={() => setShowGuestLockModal(false)} className="absolute top-4 right-4 text-neutral-500 hover:text-white">
+                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+
+                <div className="text-center">
+                    <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center">
+                        <span className="text-3xl">🔒</span>
+                    </div>
+                    <h2 className="text-2xl font-serif text-white mb-3">Только для авторизованных</h2>
+                    <p className="text-neutral-400 text-sm mb-6 leading-relaxed">
+                        Гостевой режим позволяет только загрузить фото. Чтобы создать персональный стиль, примерить образы и использовать редактор, пожалуйста, войдите через Telegram.
+                    </p>
+
+                    <button 
+                        onClick={handleGuestToLogin}
+                        className="w-full bg-white text-black font-bold py-3.5 rounded-xl hover:bg-neutral-200 transition-colors uppercase tracking-wider text-xs"
+                    >
+                        Войти через Telegram
+                    </button>
+                </div>
+            </div>
+         </div>
+      )}
+
+      {/* LIMIT MODAL */}
+      {showLimitModal && (
+         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in">
+             <div className="relative w-full max-w-md bg-[#0a0a0a] border border-amber-900/50 rounded-2xl p-8 shadow-2xl overflow-hidden">
+                <button onClick={() => setShowLimitModal(false)} className="absolute top-4 right-4 text-neutral-500 hover:text-white">
+                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+
+                <div className="text-center">
+                    <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center">
+                        <span className="text-3xl">⏳</span>
+                    </div>
+                    <h2 className="text-2xl font-serif text-white mb-3">Лимит исчерпан</h2>
+                    <p className="text-neutral-400 text-sm mb-6 leading-relaxed">
+                        В бесплатной версии доступно только <strong>{FREE_LIMIT} генерации</strong> каждые 5 часов. 
+                        Вы можете подождать или снять все ограничения прямо сейчас.
+                    </p>
+
+                    <div className="space-y-3">
+                        <button 
+                            onClick={handleBuyProClick}
+                            className="w-full bg-gradient-to-r from-amber-600 to-amber-500 text-black font-bold py-3.5 rounded-xl hover:brightness-110 transition-all shadow-lg"
+                        >
+                            Снять лимиты за {SUBSCRIPTION_PLANS[0].price}₽
+                        </button>
+                        <button 
+                            onClick={() => setShowLimitModal(false)}
+                            className="w-full bg-neutral-900 text-neutral-400 hover:text-white font-medium py-3.5 rounded-xl border border-neutral-800 transition-colors"
+                        >
+                            Вернуться позже
+                        </button>
+                    </div>
+                </div>
+            </div>
+         </div>
+      )}
+
+      {/* History Drawer */}
+      {showHistory && (
+         <div className="fixed inset-0 z-[60] flex justify-end">
+            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowHistory(false)}></div>
+            <div className="relative w-full max-w-md bg-[#0a0a0a] border-l border-neutral-800 h-full overflow-y-auto p-6 animate-fade-in shadow-2xl scrollbar-hide">
+               <div className="flex justify-between items-center mb-8">
+                  <h2 className="font-serif text-2xl text-white">Ваш Гардероб</h2>
+                  <button onClick={() => setShowHistory(false)} className="p-2"><svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
+               </div>
+               <div className="space-y-6">
+                  {history.map((item) => (
+                     <div key={item.id} onClick={() => loadFromHistory(item)} className="cursor-pointer group border border-neutral-800 hover:border-amber-600/50 bg-neutral-900 transition-all relative">
+                        <div className="aspect-[3/4] relative overflow-hidden group/image">
+                           <img src={item.resultImage || item.originalImage} className="w-full h-full object-cover" alt="History" />
+                           
+                           <button 
+                              onClick={(e) => {
+                                 e.stopPropagation();
+                                 downloadImage(item.resultImage || item.originalImage, `stylevision_${item.id}.png`);
+                              }}
+                              className="absolute bottom-2 right-2 w-8 h-8 flex items-center justify-center bg-black/60 hover:bg-amber-600 text-white rounded-full transition-colors backdrop-blur-sm shadow-lg z-10"
+                              title="Скачать"
+                           >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                              </svg>
+                           </button>
+
+                           <button 
+                              onClick={(e) => handleDeleteHistoryItem(e, item.id)}
+                              className="absolute bottom-2 right-12 w-8 h-8 flex items-center justify-center bg-black/60 hover:bg-red-600 text-white rounded-full transition-colors backdrop-blur-sm shadow-lg z-10"
+                              title="Удалить"
+                           >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                           </button>
+                        </div>
+                        <div className="p-4">
+                           <h4 className="font-serif text-lg text-white mb-1">{item.styleTitle}</h4>
+                           <p className="text-xs text-neutral-500">{item.date}</p>
+                           {item.recommendations && (
+                              <span className="text-[10px] text-amber-600 border border-amber-900/50 bg-amber-900/10 px-1.5 py-0.5 mt-2 inline-block rounded">
+                                 Полный образ
+                              </span>
+                           )}
+                        </div>
+                     </div>
+                  ))}
+               </div>
+            </div>
+         </div>
+      )}
+
+      {/* Auth Request Modal */}
+      {showAuthRequest && (
+          <LoginScreen 
+             onLogin={handleUpgradeAccount} 
+             isOverlay={true}
+             onCancel={() => setShowAuthRequest(false)}
+          />
+      )}
+
+      {/* Payment Modal */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in overflow-y-auto">
+             <div className="relative w-full max-w-lg bg-[#0a0a0a] border border-neutral-800 rounded-2xl p-6 md:p-8 shadow-2xl my-auto">
+                <button onClick={() => setShowPaymentModal(false)} className="absolute top-4 right-4 text-neutral-500 hover:text-white">
+                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+
+                <div className="relative z-10 text-center">
+                    <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-amber-400 to-amber-700 p-[1px]">
+                        <div className="w-full h-full rounded-full bg-black flex items-center justify-center">
+                            <span className="font-serif text-3xl text-amber-500 italic">S</span>
+                        </div>
+                    </div>
+                    
+                    {/* CONDITIONAL CONTENT: Either Normal or Pending */}
+                    {!pendingPaymentId ? (
+                        <>
+                            <h2 className="text-2xl font-serif text-white mb-1">Выберите тариф</h2>
+                            <p className="text-neutral-400 text-sm mb-6">Разблокируйте все возможности StyleVision AI+</p>
+
+                            {/* Plan Selection Grid */}
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+                                {SUBSCRIPTION_PLANS.map(plan => (
+                                    <div 
+                                        key={plan.id}
+                                        onClick={() => { triggerHaptic('selection'); setSelectedPlan(plan); }}
+                                        className={`
+                                            relative cursor-pointer p-4 rounded-xl border transition-all duration-300 flex flex-col items-center justify-center
+                                            ${selectedPlan.id === plan.id 
+                                                ? 'bg-neutral-800 border-amber-500 shadow-lg shadow-amber-900/20 transform scale-105 z-10' 
+                                                : 'bg-neutral-900/50 border-neutral-800 hover:bg-neutral-800 hover:border-neutral-700 opacity-80 hover:opacity-100'}
+                                        `}
+                                    >
+                                        {plan.isBestValue && (
+                                            <div className="absolute -top-2.5 bg-amber-600 text-black text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                                                Best Value
+                                            </div>
+                                        )}
+                                        <div className="text-sm text-neutral-400 mb-1 font-medium">{plan.label}</div>
+                                        <div className={`text-xl font-bold mb-1 ${selectedPlan.id === plan.id ? 'text-white' : 'text-neutral-200'}`}>
+                                            {plan.price} ₽
+                                        </div>
+                                        <div className="text-[10px] text-amber-600 font-medium uppercase tracking-wider">
+                                            {plan.description}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            
+                            {/* Features List */}
+                            <div className="bg-neutral-900/50 rounded-xl p-4 border border-neutral-800 mb-6 text-left">
+                                <ul className="space-y-2 text-xs text-neutral-300">
+                                    <li className="flex items-center gap-2">
+                                        <svg className="w-4 h-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                        Безлимитная генерация образов
+                                    </li>
+                                    <li className="flex items-center gap-2">
+                                        <svg className="w-4 h-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                        Приоритетная обработка (Fast Queue)
+                                    </li>
+                                    <li className="flex items-center gap-2">
+                                        <svg className="w-4 h-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                        Доступ к функции Virtual Try-On
+                                    </li>
+                                    <li className="flex items-center gap-2">
+                                        <svg className="w-4 h-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                        Без рекламы и водяных знаков
+                                    </li>
+                                </ul>
+                            </div>
+
+                            <button 
+                                onClick={() => initiatePayment(selectedPlan)}
+                                disabled={isProcessing}
+                                className="w-full bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-black font-bold py-4 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg"
+                            >
+                                {isProcessing ? (
+                                    <div className="animate-spin w-5 h-5 border-2 border-black border-t-transparent rounded-full"></div>
+                                ) : (
+                                    <><span>Оплатить {selectedPlan.price} ₽</span></>
+                                )}
+                            </button>
+                            
+                            <p className="mt-4 text-[10px] text-neutral-500">
+                            Нажимая кнопку, вы соглашаетесь с условиями <a href="https://stylevision.fun/offer.html" target="_blank" rel="noopener noreferrer" className="text-amber-600 hover:underline">публичной оферты</a>.
+                            </p>
+                        </>
+                    ) : (
+                        <div className="animate-fade-in">
+                            <h2 className="text-xl font-serif text-white mb-4">Ожидание оплаты...</h2>
+                            <p className="text-sm text-neutral-400 mb-6">
+                                Страница оплаты открыта в браузере. Мы автоматически активируем подписку, как только банк подтвердит платеж.
+                            </p>
+                            
+                            <div className="w-full flex justify-center mb-6">
+                                <div className="flex gap-2 items-center">
+                                   <div className="w-3 h-3 bg-amber-500 rounded-full animate-bounce"></div>
+                                   <div className="w-3 h-3 bg-amber-500 rounded-full animate-bounce delay-100"></div>
+                                   <div className="w-3 h-3 bg-amber-500 rounded-full animate-bounce delay-200"></div>
+                                </div>
+                            </div>
+
+                            <button 
+                                onClick={cancelPendingPayment}
+                                className="text-xs text-neutral-500 hover:text-white border-b border-neutral-700 hover:border-white pb-0.5 transition-all"
+                            >
+                                Отменить и попробовать снова
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Mobile Contacts Section in Payment Modal */}
+                    <div className="mt-6 border-t border-neutral-800 pt-4 text-[10px] text-neutral-500 space-y-2">
+                         <div className="flex justify-center gap-4">
+                           <a href="mailto:info@stylevision.fun" className="hover:text-amber-500 flex items-center gap-2 transition-colors">
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                              info@stylevision.fun
+                           </a>
+                           <a href="https://t.me/Nikita_Peredvigin" target="_blank" rel="noopener noreferrer" className="hover:text-amber-500 flex items-center gap-2 transition-colors">
+                              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+                              @Nikita_Peredvigin
+                           </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+      )}
+
+      <main className="flex-grow w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
         {/* Upload State */}
         {appState === AppState.UPLOAD && (
-          <div className="flex flex-col items-center justify-center min-h-[60vh]">
-            <div className="text-center max-w-3xl mx-auto mb-10 px-4">
+          <div className="flex flex-col items-center justify-center min-h-[70vh] animate-fade-in-up">
+            <div className="text-center max-w-3xl mx-auto mb-12 md:mb-16 px-4">
               <span className="text-amber-500 text-[10px] md:text-xs font-bold tracking-[0.3em] uppercase mb-4 block">AI Stylist</span>
               <h2 className="text-4xl md:text-6xl font-serif mb-6 text-white leading-tight">
                 Ваш Идеальный <br /><span className="italic text-neutral-400">Стиль</span>
@@ -838,108 +1225,9 @@ const App: React.FC = () => {
                     <img src={originalImage} alt="Preview" className="w-full h-full object-cover opacity-90" />
                  </div>
 
-                 {/* Right: Setup Flow */}
+                 {/* Right: Setup */}
                  <div className="space-y-6">
-                    {/* Back Button (Appears if not in Choice mode or if Choice mode with no selections? Logic below) */}
-                    <div className="flex items-center gap-4 mb-4">
-                         <button 
-                            onClick={() => {
-                                triggerHaptic('light');
-                                if (setupStep === 0) setAppState(AppState.UPLOAD); // Back to Upload
-                                else if (setupStep === 3) setSetupStep(0); // Back from Wardrobe Select to Choice
-                                else setSetupStep(0); // Back from AI Setup to Choice
-                            }} 
-                            className="p-2 -ml-2 hover:bg-neutral-800 rounded-full text-neutral-500 hover:text-white flex items-center gap-2"
-                         >
-                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-                             <span className="text-xs font-bold uppercase tracking-wide">Назад</span>
-                         </button>
-                    </div>
-
-                    {/* Step 0: CHOICE SCREEN */}
-                    {setupStep === 0 && (
-                        <div className="animate-fade-in space-y-4">
-                            <h2 className="text-2xl font-serif text-white mb-2">Что будем делать?</h2>
-                            <p className="text-neutral-500 text-sm mb-6">Выберите режим работы стилиста</p>
-
-                            <button 
-                                onClick={() => { triggerHaptic('selection'); setSetupStep(1); }}
-                                className="w-full bg-neutral-900 border border-neutral-800 p-6 rounded-xl hover:border-amber-600/50 transition-all group text-left relative overflow-hidden"
-                            >
-                                <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                                    <IconStudio className="w-24 h-24 text-amber-500" />
-                                </div>
-                                <h3 className="text-xl font-serif text-white mb-2 group-hover:text-amber-500 transition-colors">AI Стилист</h3>
-                                <p className="text-sm text-neutral-400 max-w-[80%]">
-                                    ИИ проанализирует вашу внешность и предложит новые стильные образы из магазинов.
-                                </p>
-                            </button>
-
-                            <button 
-                                onClick={() => { triggerHaptic('selection'); setSetupStep(3); }}
-                                className="w-full bg-neutral-900 border border-neutral-800 p-6 rounded-xl hover:border-amber-600/50 transition-all group text-left relative overflow-hidden"
-                            >
-                                <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                                    <IconWardrobe className="w-24 h-24 text-amber-500" />
-                                </div>
-                                <h3 className="text-xl font-serif text-white mb-2 group-hover:text-amber-500 transition-colors">Примерить свой гардероб</h3>
-                                <p className="text-sm text-neutral-400 max-w-[80%]">
-                                    Выберите вещи из своего виртуального гардероба, и ИИ наденет их на вас.
-                                </p>
-                            </button>
-                        </div>
-                    )}
-
-                    {/* Step 3: WARDROBE SELECTION (New Flow) */}
-                    {setupStep === 3 && (
-                        <div className="animate-fade-in">
-                            <h2 className="text-2xl font-serif text-white mb-2">Выберите вещи</h2>
-                            <p className="text-neutral-500 text-sm mb-4">Отметьте до 10 вещей для примерки (выбрано: {selectedWardrobeItems.length})</p>
-                            
-                            {wardrobe.length === 0 ? (
-                                <div className="text-center py-12 border border-dashed border-neutral-800 rounded-xl bg-neutral-900/30">
-                                    <p className="text-neutral-400 text-sm mb-4">Ваш гардероб пуст</p>
-                                    <button 
-                                        onClick={() => setActiveTab('WARDROBE')}
-                                        className="text-amber-500 border border-amber-900/30 px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider hover:bg-amber-900/10"
-                                    >
-                                        Перейти в гардероб
-                                    </button>
-                                </div>
-                            ) : (
-                                <div className="grid grid-cols-3 gap-2 max-h-[400px] overflow-y-auto pr-2 mb-6 scrollbar-hide">
-                                    {wardrobe.map(item => (
-                                        <div 
-                                            key={item.id}
-                                            onClick={() => toggleWardrobeSelection(item.id)}
-                                            className={`
-                                                relative aspect-square rounded-lg overflow-hidden cursor-pointer border-2 transition-all
-                                                ${selectedWardrobeItems.includes(item.id) ? 'border-amber-500 opacity-100' : 'border-transparent border-neutral-800 opacity-60 hover:opacity-100'}
-                                            `}
-                                        >
-                                            <img src={item.imageUrl} className="w-full h-full object-cover" alt="Item" />
-                                            {selectedWardrobeItems.includes(item.id) && (
-                                                <div className="absolute top-1 right-1 w-5 h-5 bg-amber-500 rounded-full flex items-center justify-center">
-                                                    <svg className="w-3 h-3 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                                                </div>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-
-                            <button 
-                                onClick={handleWardrobeTryOn}
-                                disabled={selectedWardrobeItems.length === 0}
-                                className="w-full bg-white text-black py-4 font-serif uppercase tracking-widest mt-4 hover:bg-amber-500 transition-colors rounded disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                Примерить
-                            </button>
-                        </div>
-                    )}
-
-                    {/* Step 1: AI SETUP (Context) */}
-                    {setupStep === 1 && (
+                    {setupStep === 1 ? (
                       <div className="animate-fade-in">
                          <h2 className="text-2xl font-serif text-white mb-6">Создаем контекст</h2>
                          <div className="space-y-6">
@@ -961,7 +1249,7 @@ const App: React.FC = () => {
                                         <span className="text-xs font-medium">{s.l}</span>
                                      </button>
                                   ))}
-                                </div>
+                               </div>
                             </div>
                             <div>
                                <label className="text-xs text-amber-600 font-bold uppercase tracking-widest block mb-3">
@@ -988,16 +1276,17 @@ const App: React.FC = () => {
                             <button onClick={() => { triggerHaptic('light'); setSetupStep(2); }} className="w-full bg-white text-black py-4 font-serif uppercase tracking-widest mt-4 hover:bg-neutral-200 transition-colors rounded">Далее</button>
                          </div>
                       </div>
-                    )}
-
-                    {/* Step 2: STORES & CONFIG (AI Flow) */}
-                    {setupStep === 2 && (
+                    ) : (
                       <div className="animate-fade-in">
                          <div className="flex items-center gap-4 mb-6">
+                           <button onClick={() => { triggerHaptic('light'); setSetupStep(1); }} className="p-2 -ml-2 hover:bg-neutral-800 rounded-full text-neutral-500 hover:text-white">
+                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                           </button>
                            <h2 className="text-2xl font-serif text-white">Где искать вещи?</h2>
                          </div>
 
                          <div className="space-y-6">
+                            {/* Restored Store Logo Grid - Removed custom-scrollbar class */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[350px] overflow-y-auto pr-2 scrollbar-hide">
                                {stores.map(store => (
                                   <div 
@@ -1055,7 +1344,7 @@ const App: React.FC = () => {
            </div>
         )}
 
-        {/* Analyzing State */}
+        {/* Analyzing State - RESTORED */}
         {appState === AppState.ANALYZING && (
           <div className="flex flex-col items-center justify-center min-h-[60vh] animate-fade-in text-center px-4">
              <div className="w-24 h-24 border-4 border-neutral-800 border-t-amber-600 rounded-full animate-spin mb-8"></div>
@@ -1068,25 +1357,12 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Results State */}
+        {/* Results State - RESTORED TO CLASSIC LAYOUT */}
         {appState === AppState.RESULTS && (
            <div className="max-w-7xl mx-auto animate-fade-in pb-20">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12 items-start relative">
-                  
-                  {/* Home/Reset Button - Positioned absolutely on mobile or inline on desktop */}
-                  <button 
-                    onClick={resetApp}
-                    className="absolute top-0 right-0 z-50 p-2 bg-neutral-800/80 backdrop-blur-md rounded-full text-white hover:bg-neutral-700 border border-neutral-700 transition-all md:hidden"
-                  >
-                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                  </button>
-
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12 items-start">
                   {/* Left Column: Image Area & Analysis */}
                   <div className="space-y-6">
-                      <div className="flex items-center justify-between md:hidden">
-                          <h2 className="text-xl font-serif text-white">Результат</h2>
-                      </div>
-
                       <div className="aspect-[3/4] relative rounded-xl overflow-hidden border border-neutral-800 bg-black">
                          {/* Main Image Display */}
                          {currentImage ? (
@@ -1124,69 +1400,77 @@ const App: React.FC = () => {
                         isProcessing={isProcessing} 
                      />
 
-                      {/* Analysis Block */}
+                      {/* Analysis Block (Restored) */}
                       {analysis && (
                           <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5 mt-6 animate-fade-in">
-                              <h3 className="text-lg font-serif text-white mb-3">Результаты</h3>
+                              <h3 className="text-lg font-serif text-white mb-3">Результаты Анализа</h3>
                               <div className="flex flex-wrap gap-2 mb-4">
-                                  <span className="px-3 py-1 rounded-full bg-neutral-800 text-xs text-neutral-300 border border-neutral-700">{analysis.gender}</span>
-                                  <span className="px-3 py-1 rounded-full bg-neutral-800 text-xs text-neutral-300 border border-neutral-700">{analysis.bodyType}</span>
+                                  <span className="px-3 py-1 rounded-full bg-neutral-800 text-xs text-neutral-300 border border-neutral-700">Пол: {analysis.gender}</span>
+                                  <span className="px-3 py-1 rounded-full bg-neutral-800 text-xs text-neutral-300 border border-neutral-700">Фигура: {analysis.bodyType}</span>
+                                  <span className="px-3 py-1 rounded-full bg-neutral-800 text-xs text-neutral-300 border border-neutral-700">Цветотип: {analysis.seasonalColor}</span>
                               </div>
                               <p className="text-sm text-neutral-400 leading-relaxed mb-4">{analysis.detailedDescription}</p>
+                              <div className="flex flex-wrap gap-2">
+                                  {analysis.styleKeywords.map((kw, i) => (
+                                      <span key={i} className="text-[10px] uppercase font-bold text-amber-600 tracking-wider">#{kw}</span>
+                                  ))}
+                              </div>
                           </div>
                       )}
                   </div>
 
                   {/* Right Column: Recommendations */}
                   <div className="space-y-6">
-                       {/* Desktop Header with Reset */}
-                       <div className="hidden md:flex items-center justify-between mb-4">
-                           <h3 className="font-serif text-2xl text-white">
-                               {recommendations.length > 0 ? "Рекомендации" : "Примерка Гардероба"}
-                           </h3>
-                           <button 
-                                onClick={resetApp}
-                                className="px-4 py-2 border border-neutral-700 rounded-lg hover:bg-neutral-800 text-sm transition-colors text-neutral-400 hover:text-white"
-                           >
-                                На главную
-                           </button>
+                       <div className="flex items-center justify-between">
+                           <h3 className="font-serif text-2xl text-white">Рекомендации</h3>
+                           <span className="text-neutral-500 text-sm">{recommendations.length} образов</span>
                        </div>
-
-                       {recommendations.length > 0 ? (
-                           <>
-                               <div className="flex items-center justify-between md:hidden">
-                                   <h3 className="font-serif text-2xl text-white">Рекомендации</h3>
-                                   <span className="text-neutral-500 text-sm">{recommendations.length} образов</span>
-                               </div>
-                               
-                               <div className="grid grid-cols-1 gap-6">
-                                   {recommendations.map(style => (
-                                      <StyleCard 
-                                          key={style.id}
-                                          style={style}
-                                          isSelected={selectedStyleId === style.id}
-                                          onClick={() => { triggerHaptic('selection'); setSelectedStyleId(style.id); }}
-                                          onApplyStyle={() => handleApplyStyle(style)}
-                                          isGenerating={isProcessing && processingMessage.includes(style.title)}
-                                          isProcessingGlobal={isProcessing}
-                                          stores={stores}
-                                       />
-                                   ))}
-                               </div>
-                           </>
-                       ) : (
-                           <div className="text-center py-20 border border-neutral-800 rounded-xl bg-neutral-900/30 flex flex-col items-center">
-                                <IconWardrobe className="w-16 h-16 text-neutral-700 mb-4" />
-                                <h3 className="text-lg font-serif text-neutral-400 mb-2">Режим примерки гардероба</h3>
-                                <p className="text-sm text-neutral-600 max-w-xs">
-                                    В этом режиме мы не генерируем новые рекомендации, а работаем с вашими вещами. Используйте редактор слева для доработки образа.
-                                </p>
-                           </div>
-                       )}
+                       
+                       <div className="grid grid-cols-1 gap-6">
+                           {recommendations.map(style => (
+                              <StyleCard 
+                                  key={style.id}
+                                  style={style}
+                                  isSelected={selectedStyleId === style.id}
+                                  onClick={() => { triggerHaptic('selection'); setSelectedStyleId(style.id); }}
+                                  onApplyStyle={() => handleApplyStyle(style)}
+                                  isGenerating={isProcessing && processingMessage.includes(style.title)}
+                                  isProcessingGlobal={isProcessing}
+                                  stores={stores}
+                               />
+                           ))}
+                           {recommendations.length === 0 && (
+                                <div className="text-center text-neutral-500 py-10 border border-neutral-800 rounded-xl bg-neutral-900/30">
+                                    <p>Нет рекомендаций. Попробуйте изменить параметры анализа или перезагрузить страницу.</p>
+                                </div>
+                           )}
+                       </div>
                   </div>
               </div>
            </div>
         )}
+
+      </main>
+
+      {/* Desktop Footer (Fixed at bottom) */}
+      <footer className="hidden md:block fixed bottom-0 left-0 right-0 z-40 bg-[#050505]/90 backdrop-blur border-t border-neutral-900 py-3 text-center text-[10px] text-neutral-600">
+        <div className="max-w-7xl mx-auto px-4 flex justify-between items-center">
+            <div className="flex gap-6">
+                <a href="mailto:info@stylevision.fun" className="hover:text-amber-600 flex items-center gap-1 transition-colors">
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                    info@stylevision.fun
+                </a>
+                <a href="https://t.me/Nikita_Peredvigin" target="_blank" rel="noopener noreferrer" className="hover:text-amber-600 flex items-center gap-1 transition-colors">
+                    <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+                    @Nikita_Peredvigin
+                </a>
+            </div>
+            <div className="flex gap-4">
+                <a href="https://stylevision.fun/offer.html" target="_blank" className="hover:text-amber-500 transition-colors">Оферта</a>
+                <a href="https://stylevision.fun/privacy.html" target="_blank" className="hover:text-amber-500 transition-colors">Конфиденциальность</a>
+            </div>
+        </div>
+      </footer>
     </div>
   );
 };

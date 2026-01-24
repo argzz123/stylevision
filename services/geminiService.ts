@@ -1,6 +1,6 @@
 
 import { Type, Schema } from "@google/genai";
-import { UserAnalysis, StyleRecommendation, AnalysisMode, Store, StylePreferences, ShoppingProduct, UserProfilePreferences } from "../types";
+import { UserAnalysis, StyleRecommendation, AnalysisMode, Store, StylePreferences, ShoppingProduct } from "../types";
 import { storageService } from "./storageService";
 
 // --- DEMO MODE CONFIGURATION ---
@@ -16,8 +16,7 @@ const getMimeType = (base64: string) => {
 };
 
 // --- IMAGE COMPRESSION & CONVERSION UTILITY ---
-// Exported so App.tsx can use it for Wardrobe uploads
-export const compressImage = (imageSource: string, maxWidth = 1024, quality = 0.8): Promise<string> => {
+const compressImage = (imageSource: string, maxWidth = 1024, quality = 0.8): Promise<string> => {
   return new Promise((resolve) => {
     const img = new Image();
     // CRITICAL FIX: Allow loading images from Supabase Storage (cross-origin)
@@ -359,8 +358,7 @@ export const getStyleRecommendations = async (
   analysis: UserAnalysis, 
   stores: Store[],
   preferences: StylePreferences,
-  onStatusUpdate?: (msg: string) => void,
-  userProfile?: UserProfilePreferences
+  onStatusUpdate?: (msg: string) => void
 ): Promise<StyleRecommendation[]> => {
 
   if (IS_DEMO_MODE) {
@@ -371,18 +369,6 @@ export const getStyleRecommendations = async (
   const activeStores = stores.filter(s => s.isSelected);
   const storeNames = activeStores.length > 0 ? activeStores.map(s => s.name).join(', ') : 'Popular Fashion Stores';
   
-  // -- PROFILE INJECTION START --
-  let profileContext = "";
-  if (userProfile) {
-      if (userProfile.favoriteStyles && userProfile.favoriteStyles.trim()) {
-          profileContext += `\nUSER FAVORITES/PREFERENCES: ${userProfile.favoriteStyles}\n`;
-      }
-      if (userProfile.taboos && userProfile.taboos.trim()) {
-          profileContext += `\nUSER TABOOS (DO NOT SUGGEST): ${userProfile.taboos}\n`;
-      }
-  }
-  // -- PROFILE INJECTION END --
-
   const schema: Schema = {
     type: Type.ARRAY,
     items: {
@@ -430,14 +416,11 @@ export const getStyleRecommendations = async (
         ROLE: Professional AI Stylist.
         CLIENT: ${analysis.gender}, ${analysis.bodyType}, ${analysis.seasonalColor}.
         REQUEST: Create 4 stylish TOTAL LOOKS for Season: ${preferences.season}, Occasion: ${preferences.occasion}.
-        ${profileContext}
         
         CRITICAL INSTRUCTION:
         - You MUST return 4 distinct looks.
         - If exact matches are hard to find, suggest generally available items fitting the style.
         - Target Stores: ${storeNames} (preferred but not limited to).
-        - STRICTLY RESPECT TABOOS: Do not suggest items listed in the "User Taboos" section if provided.
-        - INCORPORATE FAVORITES: Try to align with "User Favorites" if they fit the occasion.
         - Language: Russian.
         
         OUTPUT FORMAT: JSON Array matching the schema exactly.
@@ -454,7 +437,6 @@ export const getStyleRecommendations = async (
           const safePrompt = `
             Task: Create 4 generic fashion outfits for ${analysis.gender} suitable for ${preferences.occasion}.
             Language: Russian.
-            ${profileContext}
             Return JSON Array matching schema.
             Do not use search tools, just use your fashion knowledge.
           `;
@@ -522,81 +504,4 @@ export const editUserImage = async (
     console.error("Gemini Image Edit Error:", error);
     throw mapFriendlyError(error);
   }
-};
-
-/**
- * NEW: Virtual Try-On for Wardrobe Items
- * Takes user image + multiple wardrobe images and edits the user image.
- */
-export const tryOnWardrobeItems = async (
-    userImage: string,
-    wardrobeImages: string[],
-    onStatusUpdate?: (msg: string) => void
-): Promise<string> => {
-    if (IS_DEMO_MODE) return userImage;
-
-    const model = 'gemini-2.5-flash-image'; // Using vision capabilities for editing
-
-    // Compress main user image
-    if (onStatusUpdate) onStatusUpdate("Подготовка фото...");
-    const compressedUserImage = await compressImage(userImage, 1024, 0.85);
-
-    const parts: any[] = [
-        { inlineData: { data: cleanBase64(compressedUserImage), mimeType: 'image/jpeg' } }
-    ];
-
-    // Compress and add wardrobe images
-    let itemIndex = 1;
-    for (const itemImg of wardrobeImages) {
-        const compressedItem = await compressImage(itemImg, 512, 0.8); // Smaller for items
-        parts.push({ 
-            inlineData: { data: cleanBase64(compressedItem), mimeType: 'image/jpeg' } 
-        });
-        itemIndex++;
-    }
-
-    const prompt = `
-        TASK: High-Fidelity Photorealistic Virtual Try-On.
-        
-        GOAL: Dress the MODEL (Image 1) in the provided CLOTHING ITEMS (Images 2-${itemIndex}).
-        
-        STRICT RULES FOR 100% REALISM:
-        1. IDENTITY LOCK: The face, hair, and body shape MUST remain pixel-perfectly identical to the original image.
-        2. PHYSICS & DRAPE: The clothing must drape naturally over the body's volume. It must NOT look like a flat sticker.
-           - Create realistic folds and wrinkles where fabric bends (elbows, waist, knees).
-           - Respect gravity.
-        3. LIGHTING MATCH: The lighting on the new clothes MUST MATCH the scene's lighting direction, temperature, and intensity.
-           - Cast realistic shadows FROM the clothes onto the skin.
-           - Cast shadows FROM the arms/hair ONTO the clothes.
-        4. INTEGRATION: Blend edges seamlessly. No white halos or sharp cutouts.
-        
-        OUTPUT: A photorealistic photograph where it looks like the person physically changed clothes in the exact same spot.
-    `;
-
-    parts.push({ text: prompt });
-
-    try {
-        if (onStatusUpdate) onStatusUpdate("Примерка вещей (это займет около 20 сек)...");
-        
-        const response = await callGeminiProxy(
-            model,
-            { parts: parts },
-            undefined,
-            undefined,
-            onStatusUpdate
-        );
-
-        for (const candidate of response.candidates || []) {
-            for (const part of candidate.content.parts || []) {
-                if (part.inlineData) {
-                    return `data:image/png;base64,${part.inlineData.data}`;
-                }
-            }
-        }
-        throw new Error("No image data in response");
-
-    } catch (error: any) {
-        console.error("Try On Error:", error);
-        throw mapFriendlyError(error);
-    }
 };
