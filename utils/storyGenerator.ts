@@ -2,8 +2,7 @@
 // Utility to generate a styled story image (1080x1920)
 
 export const generateStoryImage = async (
-  beforeUrl: string,
-  afterUrl: string
+  imageUrl: string
 ): Promise<string> => {
   return new Promise((resolve, reject) => {
     const canvas = document.createElement('canvas');
@@ -21,141 +20,175 @@ export const generateStoryImage = async (
       return;
     }
 
-    // --- 1. Background ---
-    ctx.fillStyle = '#050505';
+    // --- 1. Background (Dark Luxury Gradient) ---
+    const bgGradient = ctx.createLinearGradient(0, 0, 0, height);
+    bgGradient.addColorStop(0, '#000000');
+    bgGradient.addColorStop(1, '#111111');
+    ctx.fillStyle = bgGradient;
     ctx.fillRect(0, 0, width, height);
 
-    // --- 2. Load Images ---
-    const loadImg = (src: string): Promise<HTMLImageElement> => {
-      return new Promise((res, rej) => {
-        const img = new Image();
-        img.crossOrigin = "Anonymous";
-        img.onload = () => res(img);
-        img.onerror = (e) => rej(e);
-        img.src = src;
-      });
-    };
+    // Decorative Ambient Glow (Amber/Gold)
+    const glow = ctx.createRadialGradient(width / 2, height / 2, 100, width / 2, height / 2, 800);
+    glow.addColorStop(0, 'rgba(245, 158, 11, 0.05)'); // Very faint center
+    glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, width, height);
 
-    Promise.all([loadImg(beforeUrl), loadImg(afterUrl)])
-      .then(([imgBefore, imgAfter]) => {
-        
+    // --- 2. Load Image ---
+    const img = new Image();
+    img.crossOrigin = "Anonymous";
+    
+    img.onload = () => {
         // --- 3. Layout Configuration ---
-        const photoHeight = 780; // Height of each photo section
-        const margin = 40;
-        const photoWidth = width - (margin * 2);
+        // Header ~250px
+        // Footer ~150px
+        // Image Area: Large central block
         
-        const topY = 220; // Y position for top photo
-        const bottomY = topY + photoHeight + 40; // Y position for bottom photo
+        const margin = 50;
+        const cardWidth = width - (margin * 2);
+        const cardHeight = 1350; // Large vertical image
+        const cardX = margin;
+        const cardY = 320; // Start below header
 
-        // Helper to draw image cover
-        const drawImageCover = (img: HTMLImageElement, x: number, y: number, w: number, h: number) => {
-          // Draw border/container
-          ctx.save();
-          ctx.beginPath();
-          ctx.roundRect(x, y, w, h, 30); // Rounded corners
-          ctx.clip();
-
-          // Draw Image Cover logic
-          const imgRatio = img.width / img.height;
-          const targetRatio = w / h;
-          let renderW, renderH, renderX, renderY;
-
-          if (imgRatio > targetRatio) {
-            renderH = h;
-            renderW = h * imgRatio;
-            renderX = x + (w - renderW) / 2;
-            renderY = y;
-          } else {
-            renderW = w;
-            renderH = w / imgRatio;
-            renderX = x;
-            renderY = y + (h - renderH) / 2;
-          }
-          ctx.drawImage(img, renderX, renderY, renderW, renderH);
-          
-          // Inner Shadow overlay
-          const gradient = ctx.createLinearGradient(0, y, 0, y + h);
-          gradient.addColorStop(0, 'rgba(0,0,0,0.1)');
-          gradient.addColorStop(0.8, 'rgba(0,0,0,0)');
-          gradient.addColorStop(1, 'rgba(0,0,0,0.3)');
-          ctx.fillStyle = gradient;
-          ctx.fillRect(x, y, w, h);
-
-          ctx.restore();
-
-          // Border stroke
-          ctx.beginPath();
-          ctx.roundRect(x, y, w, h, 30);
-          ctx.lineWidth = 4;
-          ctx.strokeStyle = '#262626';
-          ctx.stroke();
-        };
-
-        // Draw Images
-        drawImageCover(imgBefore, margin, topY, photoWidth, photoHeight);
-        drawImageCover(imgAfter, margin, bottomY, photoWidth, photoHeight);
-
-        // --- 4. Labels ---
-        const drawLabel = (text: string, x: number, y: number) => {
-           ctx.save();
-           ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-           ctx.beginPath();
-           ctx.roundRect(x, y, 200, 60, 15);
-           ctx.fill();
-           ctx.strokeStyle = 'rgba(245, 158, 11, 0.5)'; // Amber
-           ctx.lineWidth = 2;
-           ctx.stroke();
-           
-           ctx.fillStyle = '#ffffff';
-           ctx.font = 'bold 28px Manrope, sans-serif';
-           ctx.textAlign = 'center';
-           ctx.textBaseline = 'middle';
-           ctx.fillText(text.toUpperCase(), x + 100, y + 30);
-           ctx.restore();
-        };
-
-        drawLabel("Было", margin + 30, topY + 30);
-        drawLabel("Стало", margin + 30, bottomY + 30);
-
-        // --- 5. Header Branding ---
+        // --- Draw Header (Branding) ---
         ctx.save();
-        ctx.fillStyle = '#d97706'; // Amber-600
-        ctx.font = 'italic 700 80px "Playfair Display", serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('S', width / 2, 120);
         
+        // Logo Circle
+        const logoX = width / 2;
+        const logoY = 140;
+        const logoRad = 60;
+
+        ctx.shadowColor = "rgba(245, 158, 11, 0.4)";
+        ctx.shadowBlur = 20;
+        
+        ctx.beginPath();
+        ctx.arc(logoX, logoY, logoRad, 0, Math.PI * 2);
+        ctx.fillStyle = '#0a0a0a';
+        ctx.fill();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#f59e0b'; // Amber-500
+        ctx.stroke();
+        
+        // "S" Letter
+        ctx.shadowBlur = 0; 
+        ctx.fillStyle = '#f59e0b';
+        ctx.font = 'italic 700 70px "Playfair Display", serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('S', logoX, logoY + 5);
+
+        // App Name
         ctx.fillStyle = '#ffffff';
-        ctx.font = '40px "Playfair Display", serif';
-        ctx.letterSpacing = "4px";
-        ctx.fillText('STYLEVISION', width / 2, 170);
+        ctx.font = '400 42px "Playfair Display", serif';
+        ctx.letterSpacing = "6px";
+        ctx.fillText('STYLEVISION', width / 2, logoY + 110);
         ctx.restore();
 
-        // --- 6. Divider Element ---
-        const midY = (topY + photoHeight + bottomY) / 2;
+        // --- Draw Main Image (Rounded Card) ---
         ctx.save();
-        ctx.strokeStyle = '#d97706';
+        
+        // 1. Shadow for depth
+        ctx.shadowColor = "rgba(0,0,0,0.8)";
+        ctx.shadowBlur = 50;
+        ctx.shadowOffsetY = 20;
+
+        // 2. Clipping Path (Rounded Rect)
         ctx.beginPath();
-        ctx.moveTo(width/2 - 50, midY);
-        ctx.lineTo(width/2 + 50, midY);
-        ctx.lineWidth = 4;
+        ctx.roundRect(cardX, cardY, cardWidth, cardHeight, 40);
+        ctx.clip();
+
+        // 3. Draw Image (Cover Fit)
+        const imgRatio = img.width / img.height;
+        const targetRatio = cardWidth / cardHeight;
+        let renderW, renderH, renderX, renderY;
+
+        if (imgRatio > targetRatio) {
+            renderH = cardHeight;
+            renderW = cardHeight * imgRatio;
+            renderX = cardX + (cardWidth - renderW) / 2;
+            renderY = cardY;
+        } else {
+            renderW = cardWidth;
+            renderH = cardWidth / imgRatio;
+            renderX = cardX;
+            renderY = cardY + (cardHeight - renderH) / 2;
+        }
+        ctx.drawImage(img, renderX, renderY, renderW, renderH);
+        
+        // 4. Inner Shadow / Vignette Overlay (for style)
+        const gradient = ctx.createLinearGradient(0, cardY, 0, cardY + cardHeight);
+        gradient.addColorStop(0, 'rgba(0,0,0,0.1)');
+        gradient.addColorStop(0.8, 'rgba(0,0,0,0)');
+        gradient.addColorStop(1, 'rgba(0,0,0,0.4)');
+        ctx.fillStyle = gradient;
+        ctx.fill();
+
+        ctx.restore();
+
+        // --- Draw Border ---
+        ctx.save();
+        ctx.beginPath();
+        ctx.roundRect(cardX, cardY, cardWidth, cardHeight, 40);
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#333'; // Subtle border
+        ctx.stroke();
+        
+        // Inner thin gold border
+        ctx.beginPath();
+        ctx.roundRect(cardX + 15, cardY + 15, cardWidth - 30, cardHeight - 30, 30);
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = 'rgba(245, 158, 11, 0.5)';
         ctx.stroke();
         ctx.restore();
 
-        // --- 7. Footer text ---
+        // --- Badge (Optional) ---
+        /*
         ctx.save();
-        ctx.fillStyle = '#737373';
-        ctx.font = '24px Manrope, sans-serif';
+        const badgeText = "AI LOOK";
+        ctx.font = 'bold 24px Manrope, sans-serif';
+        const badgeW = ctx.measureText(badgeText).width + 60;
+        const badgeH = 60;
+        const badgeX = cardX + cardWidth - badgeW - 30;
+        const badgeY = cardY + 30;
+
+        ctx.fillStyle = "rgba(0,0,0,0.7)";
+        ctx.beginPath();
+        ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 30);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255,255,255,0.2)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        ctx.fillStyle = "#fff";
         ctx.textAlign = 'center';
-        ctx.fillText('Сгенерировано AI Стилистом', width / 2, height - 80);
+        ctx.textBaseline = 'middle';
+        ctx.fillText(badgeText, badgeX + badgeW/2, badgeY + badgeH/2);
+        ctx.restore();
+        */
+
+        // --- Footer ---
+        ctx.save();
+        ctx.fillStyle = '#666';
+        ctx.font = '300 28px Manrope, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.letterSpacing = "2px";
+        ctx.fillText('PERSONAL AI STYLIST', width / 2, height - 100);
         ctx.restore();
 
-        // --- 8. Export ---
-        const dataUrl = canvas.toDataURL('image/png', 0.9);
-        resolve(dataUrl);
-      })
-      .catch(err => {
-        console.error("Story generation failed", err);
-        reject(err);
-      });
+        // --- Export ---
+        try {
+            const dataUrl = canvas.toDataURL('image/png', 0.95);
+            resolve(dataUrl);
+        } catch (e) {
+            reject(e);
+        }
+    };
+
+    img.onerror = (e) => {
+        console.error("Story image load failed", e);
+        reject(new Error("Failed to load image"));
+    };
+
+    img.src = imageUrl;
   });
 };
