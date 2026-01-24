@@ -1150,9 +1150,29 @@ const App: React.FC = () => {
                                 {isProcessing ? (
                                     <div className="animate-spin w-5 h-5 border-2 border-black border-t-transparent rounded-full"></div>
                                 ) : (
-                                    <><span>Оплатить {selectedPlan?.price} ₽</span></>
+                                    <><span>Оплатить {selectedPlan?.price} ₽ через ЮKassa</span></>
                                 )}
                             </button>
+                            
+                            {/* Terms Disclaimer */}
+                            <p className="text-[10px] text-neutral-500 mt-3 text-center leading-normal">
+                                Нажимая кнопку, вы соглашаетесь с <br />
+                                <a 
+                                    href="https://stylevision.fun/offer.html" 
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        const tg = (window as any).Telegram?.WebApp;
+                                        if (tg && tg.initData) {
+                                            tg.openLink("https://stylevision.fun/offer.html");
+                                        } else {
+                                            window.open("https://stylevision.fun/offer.html", "_blank");
+                                        }
+                                    }}
+                                    className="text-neutral-400 hover:text-amber-500 underline transition-colors cursor-pointer"
+                                >
+                                    публичной офертой
+                                </a>
+                            </p>
                         </>
                     ) : (
                         <div className="animate-fade-in">
