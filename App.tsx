@@ -18,6 +18,41 @@ const MODERATOR_ID = 999999; // Special ID used in LoginScreen for moderator
 
 const FREE_LIMIT = 2; // Max generations per 5 hours
 
+// SUBSCRIPTION PLANS CONFIGURATION
+interface SubscriptionPlan {
+  id: string;
+  months: number;
+  price: number;
+  label: string;
+  description: string;
+  isBestValue?: boolean;
+}
+
+const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
+  { 
+    id: 'month_1', 
+    months: 1, 
+    price: 490, 
+    label: '1 Месяц', 
+    description: 'Старт' 
+  },
+  { 
+    id: 'month_3', 
+    months: 3, 
+    price: 650, 
+    label: '3 Месяца', 
+    description: 'Выгодно' 
+  },
+  { 
+    id: 'month_6', 
+    months: 6, 
+    price: 850, 
+    label: '6 Месяцев', 
+    description: 'Максимум',
+    isBestValue: true
+  }
+];
+
 // Configuration for available stores
 const INITIAL_STORES: Store[] = [
   { id: 'lamoda', name: 'Lamoda', domain: 'lamoda.ru', logoUrl: 'https://logo-teka.com/wp-content/uploads/2025/07/lamoda-icon-logo.svg', isSelected: true },
@@ -48,7 +83,7 @@ const App: React.FC = () => {
   
   // Config State
   const [globalConfig, setGlobalConfig] = useState<GlobalConfig>({ 
-      price: "1.00", 
+      price: "490.00", // Default display price
       productTitle: "StyleVision AI+", 
       productDescription: "",
       maintenanceMode: false
@@ -64,6 +99,7 @@ const App: React.FC = () => {
   
   // Payment Pending Logic
   const [pendingPaymentId, setPendingPaymentId] = useState<string | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan>(SUBSCRIPTION_PLANS[1]); // Default to 3 months
   const [isPollingPayment, setIsPollingPayment] = useState(false);
   const paymentPollInterval = useRef<any>(null);
 
@@ -325,8 +361,13 @@ const App: React.FC = () => {
       clearInterval(paymentPollInterval.current);
       
       triggerHaptic('success');
+      
+      // Retrieve pending months from local storage (or default to 1)
+      const storedMonths = localStorage.getItem('pending_payment_months');
+      const monthsToAdd = storedMonths ? parseInt(storedMonths, 10) : 1;
+
       const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 30);
+      expiresAt.setDate(expiresAt.getDate() + (monthsToAdd * 30));
       const expiresIso = expiresAt.toISOString();
 
       await storageService.setProStatus(user.id, true, expiresIso);
@@ -337,10 +378,11 @@ const App: React.FC = () => {
       
       setPendingPaymentId(null);
       localStorage.removeItem('pending_payment_id');
+      localStorage.removeItem('pending_payment_months');
       
       setShowPaymentModal(false);
       setIsPro(true);
-      alert(`Оплата прошла успешно! AI+ режим активирован до ${new Date(expiresIso).toLocaleDateString()}`);
+      alert(`Оплата прошла успешно! AI+ активирован на ${monthsToAdd} мес.`);
   };
 
   const loadUserData = async (userId: number) => {
@@ -466,7 +508,7 @@ const App: React.FC = () => {
       setShowLimitModal(false);
   };
 
-  const initiatePayment = async () => {
+  const initiatePayment = async (plan: SubscriptionPlan) => {
     triggerHaptic('medium');
     if (!user) return;
     if (user.isGuest) {
@@ -479,14 +521,16 @@ const App: React.FC = () => {
         setIsProcessing(true);
         setProcessingMessage('Соединение с ЮKassa...');
         
-        const payment = await createPayment(globalConfig.price, globalConfig.productDescription || "Подписка StyleVision AI+ (1 месяц)");
+        const description = `Подписка StyleVision AI+ (${plan.label})`;
+        const payment = await createPayment(plan.price.toFixed(2), description);
         
         if (payment.confirmation && payment.confirmation.confirmation_url) {
             const paymentUrl = payment.confirmation.confirmation_url;
             
-            // Save pending ID
+            // Save pending ID and PLAN DURATION
             if (payment.id) {
                 localStorage.setItem('pending_payment_id', payment.id);
+                localStorage.setItem('pending_payment_months', String(plan.months));
                 setPendingPaymentId(payment.id);
             }
 
@@ -691,6 +735,7 @@ const App: React.FC = () => {
   const cancelPendingPayment = () => {
       setPendingPaymentId(null);
       localStorage.removeItem('pending_payment_id');
+      localStorage.removeItem('pending_payment_months');
       clearInterval(paymentPollInterval.current);
       setShowPaymentModal(false);
   }
@@ -939,7 +984,7 @@ const App: React.FC = () => {
                             onClick={handleBuyProClick}
                             className="w-full bg-gradient-to-r from-amber-600 to-amber-500 text-black font-bold py-3.5 rounded-xl hover:brightness-110 transition-all shadow-lg"
                         >
-                            Снять лимиты за {globalConfig.price}₽
+                            Снять лимиты за {SUBSCRIPTION_PLANS[0].price}₽
                         </button>
                         <button 
                             onClick={() => setShowLimitModal(false)}
@@ -1018,14 +1063,14 @@ const App: React.FC = () => {
 
       {/* Payment Modal */}
       {showPaymentModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in">
-             <div className="relative w-full max-w-md bg-[#0a0a0a] border border-neutral-800 rounded-2xl p-8 shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in overflow-y-auto">
+             <div className="relative w-full max-w-lg bg-[#0a0a0a] border border-neutral-800 rounded-2xl p-6 md:p-8 shadow-2xl my-auto">
                 <button onClick={() => setShowPaymentModal(false)} className="absolute top-4 right-4 text-neutral-500 hover:text-white">
                     <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
 
                 <div className="relative z-10 text-center">
-                    <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-gradient-to-br from-amber-400 to-amber-700 p-[1px]">
+                    <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-amber-400 to-amber-700 p-[1px]">
                         <div className="w-full h-full rounded-full bg-black flex items-center justify-center">
                             <span className="font-serif text-3xl text-amber-500 italic">S</span>
                         </div>
@@ -1034,35 +1079,69 @@ const App: React.FC = () => {
                     {/* CONDITIONAL CONTENT: Either Normal or Pending */}
                     {!pendingPaymentId ? (
                         <>
-                            <h2 className="text-2xl font-serif text-white mb-2">StyleVision AI+ (1 месяц)</h2>
+                            <h2 className="text-2xl font-serif text-white mb-1">Выберите тариф</h2>
+                            <p className="text-neutral-400 text-sm mb-6">Разблокируйте все возможности StyleVision AI+</p>
+
+                            {/* Plan Selection Grid */}
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+                                {SUBSCRIPTION_PLANS.map(plan => (
+                                    <div 
+                                        key={plan.id}
+                                        onClick={() => { triggerHaptic('selection'); setSelectedPlan(plan); }}
+                                        className={`
+                                            relative cursor-pointer p-4 rounded-xl border transition-all duration-300 flex flex-col items-center justify-center
+                                            ${selectedPlan.id === plan.id 
+                                                ? 'bg-neutral-800 border-amber-500 shadow-lg shadow-amber-900/20 transform scale-105 z-10' 
+                                                : 'bg-neutral-900/50 border-neutral-800 hover:bg-neutral-800 hover:border-neutral-700 opacity-80 hover:opacity-100'}
+                                        `}
+                                    >
+                                        {plan.isBestValue && (
+                                            <div className="absolute -top-2.5 bg-amber-600 text-black text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                                                Best Value
+                                            </div>
+                                        )}
+                                        <div className="text-sm text-neutral-400 mb-1 font-medium">{plan.label}</div>
+                                        <div className={`text-xl font-bold mb-1 ${selectedPlan.id === plan.id ? 'text-white' : 'text-neutral-200'}`}>
+                                            {plan.price} ₽
+                                        </div>
+                                        <div className="text-[10px] text-amber-600 font-medium uppercase tracking-wider">
+                                            {plan.description}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
                             
-                            <div className="bg-neutral-900/50 rounded-xl p-4 border border-neutral-800 mb-6">
-                                <div className="flex justify-between items-center mb-3 pb-3 border-b border-neutral-800">
-                                    <span className="text-neutral-400 text-sm">Стоимость</span>
-                                    <span className="text-xl font-bold text-white">{globalConfig.price} ₽</span>
-                                </div>
-                                <div className="text-left text-xs text-neutral-300 space-y-2">
-                                {globalConfig.productDescription ? (
-                                    <p className="whitespace-pre-line leading-relaxed">{globalConfig.productDescription}</p>
-                                ) : (
-                                    <>
-                                        <p>• Безлимитная генерация образов на 30 дней</p>
-                                        <p>• Приоритетная обработка (без очереди)</p>
-                                        <p>• Доступ к функции примерки (Virtual Try-On)</p>
-                                        </>
-                                )}
-                                </div>
+                            {/* Features List */}
+                            <div className="bg-neutral-900/50 rounded-xl p-4 border border-neutral-800 mb-6 text-left">
+                                <ul className="space-y-2 text-xs text-neutral-300">
+                                    <li className="flex items-center gap-2">
+                                        <svg className="w-4 h-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                        Безлимитная генерация образов
+                                    </li>
+                                    <li className="flex items-center gap-2">
+                                        <svg className="w-4 h-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                        Приоритетная обработка (Fast Queue)
+                                    </li>
+                                    <li className="flex items-center gap-2">
+                                        <svg className="w-4 h-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                        Доступ к функции Virtual Try-On
+                                    </li>
+                                    <li className="flex items-center gap-2">
+                                        <svg className="w-4 h-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                        Без рекламы и водяных знаков
+                                    </li>
+                                </ul>
                             </div>
 
                             <button 
-                                onClick={initiatePayment}
+                                onClick={() => initiatePayment(selectedPlan)}
                                 disabled={isProcessing}
-                                className="w-full bg-amber-600 hover:bg-amber-500 text-black font-bold py-4 rounded-xl transition-all flex items-center justify-center gap-2"
+                                className="w-full bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-black font-bold py-4 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg"
                             >
                                 {isProcessing ? (
                                     <div className="animate-spin w-5 h-5 border-2 border-black border-t-transparent rounded-full"></div>
                                 ) : (
-                                    <><span>Оплатить через</span><span className="font-bold">ЮKassa</span></>
+                                    <><span>Оплатить {selectedPlan.price} ₽</span></>
                                 )}
                             </button>
                             
@@ -1105,9 +1184,6 @@ const App: React.FC = () => {
                               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
                               @Nikita_Peredvigin
                            </a>
-                        </div>
-                        <div className="flex justify-center gap-3">
-                           <a href="https://stylevision.fun/privacy.html" target="_blank" className="hover:underline">Конфиденциальность</a>
                         </div>
                     </div>
                 </div>

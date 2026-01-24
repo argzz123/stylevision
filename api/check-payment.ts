@@ -1,4 +1,10 @@
 
+import { createClient } from '@supabase/supabase-js';
+
+// Hardcoded for serverless function stability
+const SUPABASE_URL = 'https://zmpdmtopclevptgcjwgj.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InptcGRtdG9wY2xldnB0Z2Nqd2dqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg1NjAzMTUsImV4cCI6MjA4NDEzNjMxNX0.Pe2QSzLS6ILHzjgjbcywqvaTqjUgpJQDmBFKCyZ3QKU';
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -9,9 +15,39 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  // Настройки магазина
-  const SHOP_ID = '1254700';
-  const SECRET_KEY = 'live_knC5pIMu9fCBWGABTJOXCGtlrZdpGldHJAMrlT6xcsI';
+  // --- CREDENTIALS CONFIGURATION ---
+  let SHOP_ID = '1254700'; 
+  let SECRET_KEY = 'live_knC5pIMu9fCBWGABTJOXCGtlrZdpGldHJAMrlT6xcsI'; 
+  
+  const TEST_SHOP_ID = '1256425';
+  const TEST_SECRET_KEY = 'test_iCFbKUwMgGqxOuPZ23LbXv--BPh8oDZEG_UJ2wCLHaw';
+  
+  const SYSTEM_USER_ID = -100;
+
+  try {
+      // 1. Check Maintenance Mode in Supabase
+      const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+      const { data } = await supabase
+        .from('users')
+        .select('last_name')
+        .eq('id', SYSTEM_USER_ID)
+        .maybeSingle();
+
+      if (data && data.last_name) {
+          try {
+              const config = JSON.parse(data.last_name);
+              if (config.maintenanceMode) {
+                  SHOP_ID = TEST_SHOP_ID;
+                  SECRET_KEY = TEST_SECRET_KEY;
+              }
+          } catch (e) {
+              // ignore parse errors
+          }
+      }
+  } catch (dbError) {
+      console.error("DB Check failed", dbError);
+  }
+  // --------------------------------
 
   if (req.method !== 'POST') {
      return res.status(405).json({ error: 'Method Not Allowed' });
