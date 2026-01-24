@@ -379,7 +379,11 @@ export const getStyleRecommendations = async (
         title: { type: Type.STRING },
         description: { type: Type.STRING, description: "Explain WHY this specific look suits the user's body type/color" },
         rationale: { type: Type.STRING },
-        colorPalette: { type: Type.ARRAY, items: { type: Type.STRING } },
+        colorPalette: { 
+            type: Type.ARRAY, 
+            items: { type: Type.STRING },
+            description: "Array of exactly 4-5 HEX color codes (e.g. '#FF5733') defining the look's palette. NO color names."
+        },
         items: {
           type: Type.ARRAY,
           items: {
@@ -390,7 +394,8 @@ export const getStyleRecommendations = async (
               searchQuery: { type: Type.STRING }
             },
             required: ["name", "category"]
-          }
+          },
+          description: "A complete list of 4 to 10 items (clothes, shoes, bags, accessories) for a total look."
         }
       },
       required: ["id", "title", "description", "colorPalette", "items"]
@@ -419,11 +424,11 @@ export const getStyleRecommendations = async (
         REQUEST: Create ${count} distinct, stylish TOTAL LOOKS for Season: ${preferences.season}, Occasion: ${preferences.occasion}.
         
         CRITICAL INSTRUCTION:
-        - You MUST return exactly ${count} distinct looks.
-        - In the 'description' field, briefly explain WHY this look fits this specific client (e.g., "Suits hourglass shape because...", "Matches autumn color type because...").
-        - If exact matches are hard to find, suggest generally available items fitting the style.
-        - Target Stores: ${storeNames} (preferred but not limited to).
-        - Language: Russian.
+        1. **colorPalette**: MUST use HEX CODES (e.g., "#F0A0C0", "#123456"). Do NOT use text names like "Beige" or "Red".
+        2. **items**: Each look MUST contain between 4 to 10 items. Include main clothes, shoes, bag, and specific accessories (jewelry, belt, glasses, etc.). Do NOT stop at 3 items.
+        3. **description**: Briefly explain WHY this look fits this specific client.
+        4. Target Stores: ${storeNames} (preferred but not limited to).
+        5. Language: Russian (for titles, descriptions, and item names).
         
         OUTPUT FORMAT: JSON Array matching the schema exactly.
         Generate IDs as 'style_${Date.now()}_1', 'style_${Date.now()}_2' etc.
@@ -437,10 +442,12 @@ export const getStyleRecommendations = async (
           if (onStatusUpdate) onStatusUpdate("Уточняем детали стиля (повторная генерация)...");
           
           const safePrompt = `
-            Task: Create ${Math.min(count, 5)} generic fashion outfits for ${analysis.gender} suitable for ${preferences.occasion}.
+            Task: Create ${Math.min(count, 5)} distinct fashion outfits for ${analysis.gender} suitable for ${preferences.occasion}.
             Language: Russian.
+            REQUIREMENTS:
+            1. colorPalette: Array of HEX codes (e.g., '#000000').
+            2. items: 4-8 items per outfit (clothes + accessories).
             Return JSON Array matching schema.
-            Include a short description of why it fits in the 'description' field.
             Do not use search tools.
           `;
           
