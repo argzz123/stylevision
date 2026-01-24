@@ -545,8 +545,7 @@ export const tryOnWardrobeItems = async (
         { inlineData: { data: cleanBase64(compressedUserImage), mimeType: 'image/jpeg' } }
     ];
 
-    // Compress and add wardrobe images (up to 10 as per UI, but technically model limit is token based)
-    // We treat them as reference images in the prompt context essentially
+    // Compress and add wardrobe images
     let itemIndex = 1;
     for (const itemImg of wardrobeImages) {
         const compressedItem = await compressImage(itemImg, 512, 0.8); // Smaller for items
@@ -557,21 +556,21 @@ export const tryOnWardrobeItems = async (
     }
 
     const prompt = `
-        CRITICAL TASK: VIRTUAL TRY-ON WITH 100% IDENTITY PRESERVATION.
+        TASK: High-Fidelity Photorealistic Virtual Try-On.
         
-        INPUTS:
-        - Image 1: The MODEL (Person).
-        - Images 2-${itemIndex}: CLOTHING ITEMS to be worn.
+        GOAL: Dress the MODEL (Image 1) in the provided CLOTHING ITEMS (Images 2-${itemIndex}).
         
-        MANDATORY RULES (STRICT ENFORCEMENT):
-        1. DO NOT GENERATE A NEW FACE. YOU MUST KEEP THE ORIGINAL FACE PIXEL-PERFECT.
-        2. DO NOT CHANGE THE BODY SHAPE OR POSE.
-        3. ACT AS A TEXTURE MAPPER: Only replace the pixels of the model's current clothes with the provided wardrobe items.
-        4. IF THE FACE CHANGES EVEN SLIGHTLY, THE TASK IS FAILED.
-        5. Composite the provided items onto the body naturally, respecting lighting and shadows.
+        STRICT RULES FOR 100% REALISM:
+        1. IDENTITY LOCK: The face, hair, and body shape MUST remain pixel-perfectly identical to the original image.
+        2. PHYSICS & DRAPE: The clothing must drape naturally over the body's volume. It must NOT look like a flat sticker.
+           - Create realistic folds and wrinkles where fabric bends (elbows, waist, knees).
+           - Respect gravity.
+        3. LIGHTING MATCH: The lighting on the new clothes MUST MATCH the scene's lighting direction, temperature, and intensity.
+           - Cast realistic shadows FROM the clothes onto the skin.
+           - Cast shadows FROM the arms/hair ONTO the clothes.
+        4. INTEGRATION: Blend edges seamlessly. No white halos or sharp cutouts.
         
-        OUTPUT:
-        - A photorealistic image of the ORIGINAL MODEL wearing the NEW CLOTHES.
+        OUTPUT: A photorealistic photograph where it looks like the person physically changed clothes in the exact same spot.
     `;
 
     parts.push({ text: prompt });

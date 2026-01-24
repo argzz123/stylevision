@@ -961,7 +961,7 @@ const App: React.FC = () => {
                                         <span className="text-xs font-medium">{s.l}</span>
                                      </button>
                                   ))}
-                               </div>
+                                </div>
                             </div>
                             <div>
                                <label className="text-xs text-amber-600 font-bold uppercase tracking-widest block mb-3">
@@ -1071,9 +1071,22 @@ const App: React.FC = () => {
         {/* Results State */}
         {appState === AppState.RESULTS && (
            <div className="max-w-7xl mx-auto animate-fade-in pb-20">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12 items-start">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12 items-start relative">
+                  
+                  {/* Home/Reset Button - Positioned absolutely on mobile or inline on desktop */}
+                  <button 
+                    onClick={resetApp}
+                    className="absolute top-0 right-0 z-50 p-2 bg-neutral-800/80 backdrop-blur-md rounded-full text-white hover:bg-neutral-700 border border-neutral-700 transition-all md:hidden"
+                  >
+                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+
                   {/* Left Column: Image Area & Analysis */}
                   <div className="space-y-6">
+                      <div className="flex items-center justify-between md:hidden">
+                          <h2 className="text-xl font-serif text-white">Результат</h2>
+                      </div>
+
                       <div className="aspect-[3/4] relative rounded-xl overflow-hidden border border-neutral-800 bg-black">
                          {/* Main Image Display */}
                          {currentImage ? (
@@ -1126,9 +1139,22 @@ const App: React.FC = () => {
 
                   {/* Right Column: Recommendations */}
                   <div className="space-y-6">
+                       {/* Desktop Header with Reset */}
+                       <div className="hidden md:flex items-center justify-between mb-4">
+                           <h3 className="font-serif text-2xl text-white">
+                               {recommendations.length > 0 ? "Рекомендации" : "Примерка Гардероба"}
+                           </h3>
+                           <button 
+                                onClick={resetApp}
+                                className="px-4 py-2 border border-neutral-700 rounded-lg hover:bg-neutral-800 text-sm transition-colors text-neutral-400 hover:text-white"
+                           >
+                                На главную
+                           </button>
+                       </div>
+
                        {recommendations.length > 0 ? (
                            <>
-                               <div className="flex items-center justify-between">
+                               <div className="flex items-center justify-between md:hidden">
                                    <h3 className="font-serif text-2xl text-white">Рекомендации</h3>
                                    <span className="text-neutral-500 text-sm">{recommendations.length} образов</span>
                                </div>
@@ -1161,346 +1187,6 @@ const App: React.FC = () => {
               </div>
            </div>
         )}
-    </div>
-  );
-
-  const renderWardrobe = () => (
-      <div className="animate-fade-in p-2 pb-20">
-          <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-serif text-white">Мой Гардероб</h2>
-              <button 
-                onClick={() => wardrobeInputRef.current?.click()}
-                className="bg-amber-600 text-black px-4 py-2 rounded-full font-bold text-xs uppercase shadow-lg shadow-amber-900/20 flex items-center gap-2 hover:bg-amber-500 transition-colors"
-              >
-                 <span>+ Добавить вещь</span>
-              </button>
-              <input type="file" ref={wardrobeInputRef} className="hidden" accept="image/*" onChange={handleWardrobeUpload} />
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {wardrobe.map((item) => (
-                  <div key={item.id} className="relative aspect-square border border-neutral-800 rounded-lg overflow-hidden group bg-neutral-900">
-                      <img src={item.imageUrl} alt="Wardrobe Item" className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2">
-                          <button 
-                            onClick={(e) => handleDeleteWardrobeItem(e, item.id)}
-                            className="w-full bg-red-900/50 text-red-400 text-xs py-1 rounded hover:bg-red-900"
-                          >
-                             Удалить
-                          </button>
-                      </div>
-                  </div>
-              ))}
-              {wardrobe.length === 0 && (
-                  <div className="col-span-2 md:col-span-4 lg:col-span-5 text-center py-12 border-2 border-dashed border-neutral-800 rounded-xl">
-                      <p className="text-neutral-500 text-sm mb-2">Ваш гардероб пуст</p>
-                      <p className="text-xs text-neutral-600">Загрузите фото своих вещей, чтобы ИИ мог их использовать</p>
-                  </div>
-              )}
-          </div>
-      </div>
-  );
-
-  const renderProfile = () => (
-      <div className="animate-fade-in p-2 pb-20 max-w-4xl mx-auto space-y-8">
-          {/* User Info Card */}
-          <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 flex items-center gap-6">
-               <div className="w-20 h-20 rounded-full bg-neutral-800 border-2 border-neutral-700 flex items-center justify-center overflow-hidden">
-                    {user?.photo_url ? (
-                        <img src={user.photo_url} alt="Profile" className="w-full h-full object-cover" />
-                    ) : (
-                        <span className="text-3xl">👤</span>
-                    )}
-               </div>
-               <div className="flex-1">
-                   <h2 className="text-2xl font-serif text-white">{user?.first_name} {user?.last_name}</h2>
-                   <p className="text-neutral-500 text-sm mb-3">@{user?.username}</p>
-                   {isPro ? (
-                       <span className="inline-block bg-green-900/30 text-green-500 border border-green-900 text-xs px-2 py-0.5 rounded">AI+ Активен</span>
-                   ) : (
-                       <button onClick={handleBuyProClick} className="text-amber-500 text-xs font-bold uppercase tracking-wider hover:underline">
-                          Купить подписку
-                       </button>
-                   )}
-               </div>
-          </div>
-
-          {/* Preferences Section */}
-          <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6">
-              <h3 className="text-lg font-serif text-white mb-4">Настройки Стиля (Предпочтения)</h3>
-              <div className="space-y-4">
-                  <div>
-                      <label className="block text-xs text-neutral-500 uppercase tracking-widest mb-2">
-                          Любимые стили
-                      </label>
-                      <textarea 
-                          value={userPreferences.favoriteStyles}
-                          onChange={(e) => setUserPreferences({...userPreferences, favoriteStyles: e.target.value})}
-                          placeholder="Например: Минимализм, Old Money..."
-                          className="w-full bg-black border border-neutral-800 rounded-lg p-3 text-sm text-white focus:border-amber-600 outline-none h-20"
-                      />
-                  </div>
-                  <div>
-                      <label className="block text-xs text-neutral-500 uppercase tracking-widest mb-2 text-red-400">
-                          Табу
-                      </label>
-                      <textarea 
-                          value={userPreferences.taboos}
-                          onChange={(e) => setUserPreferences({...userPreferences, taboos: e.target.value})}
-                          placeholder="Например: Не ношу каблуки..."
-                          className="w-full bg-black border border-neutral-800 rounded-lg p-3 text-sm text-white focus:border-red-900 outline-none h-20"
-                      />
-                  </div>
-                  <button 
-                    onClick={savePreferences}
-                    className="bg-neutral-800 hover:bg-neutral-700 text-white px-6 py-2 rounded-lg text-sm transition-colors"
-                  >
-                     Сохранить настройки
-                  </button>
-              </div>
-          </div>
-
-          {/* Gallery (Old History) */}
-          <div className="space-y-4">
-              <h3 className="text-xl font-serif text-white">Галерея Образов</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {history.map((item) => (
-                     <div key={item.id} onClick={() => loadFromHistory(item)} className="cursor-pointer group border border-neutral-800 hover:border-amber-600/50 bg-neutral-900 transition-all relative rounded-lg overflow-hidden">
-                        <div className="aspect-[3/4] relative overflow-hidden group/image">
-                           <img src={item.resultImage || item.originalImage} className="w-full h-full object-cover" alt="History" />
-                           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                               <button 
-                                  onClick={(e) => {
-                                     e.stopPropagation();
-                                     downloadImage(item.resultImage || item.originalImage, `stylevision_${item.id}.png`);
-                                  }}
-                                  className="p-2 bg-black/60 text-white rounded-full hover:bg-amber-600"
-                               >
-                                  ⬇️
-                               </button>
-                               <button 
-                                  onClick={(e) => handleDeleteHistoryItem(e, item.id)}
-                                  className="p-2 bg-black/60 text-white rounded-full hover:bg-red-600"
-                               >
-                                  🗑️
-                               </button>
-                           </div>
-                        </div>
-                        <div className="p-3">
-                           <h4 className="font-serif text-sm text-white truncate">{item.styleTitle}</h4>
-                           <p className="text-[10px] text-neutral-500">{item.date}</p>
-                        </div>
-                     </div>
-                  ))}
-                  {history.length === 0 && (
-                      <div className="col-span-full text-center py-8 text-neutral-500 text-sm">История пуста</div>
-                  )}
-              </div>
-          </div>
-          
-           {/* Admin & Logout */}
-           <div className="flex justify-between items-center pt-8 border-t border-neutral-800">
-               {isAdmin(user.id) && (
-                  <button 
-                    onClick={() => setShowAdminPanel(true)}
-                    className="text-red-500 text-xs uppercase tracking-widest font-bold border border-red-900/30 px-3 py-1 rounded hover:bg-red-900/10"
-                  >
-                    Admin Panel
-                  </button>
-               )}
-               <button onClick={handleLogout} className="text-neutral-500 hover:text-white text-xs uppercase tracking-widest">
-                   Выйти
-               </button>
-           </div>
-      </div>
-  );
-
-  return (
-    <div className="min-h-screen bg-[#050505] text-neutral-300 font-sans flex relative overflow-hidden">
-      
-      {/* DESKTOP SIDEBAR */}
-      <aside className="hidden md:flex flex-col w-64 h-screen fixed left-0 top-0 bg-black border-r border-neutral-800 z-50 p-6">
-          <div className="flex items-center gap-3 mb-12 cursor-pointer" onClick={resetApp}>
-             <div className="w-8 h-8 border border-neutral-700 flex items-center justify-center bg-neutral-900">
-               <span className="font-serif text-xl text-amber-500">S</span>
-             </div>
-             <h1 className="text-lg font-serif text-white tracking-widest">STYLEVISION</h1>
-          </div>
-          
-          <nav className="flex-1 space-y-4">
-              <button 
-                onClick={() => setActiveTab('STUDIO')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all group ${activeTab === 'STUDIO' ? 'bg-amber-900/20 text-amber-500 border border-amber-900/50' : 'text-neutral-400 hover:bg-neutral-900'}`}
-              >
-                  <IconStudio className={`w-5 h-5 ${activeTab === 'STUDIO' ? 'text-amber-500' : 'text-neutral-400 group-hover:text-white'}`} filled={activeTab === 'STUDIO'} />
-                  <span className="font-bold text-sm tracking-wide">Студия</span>
-              </button>
-              <button 
-                onClick={() => setActiveTab('WARDROBE')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all group ${activeTab === 'WARDROBE' ? 'bg-amber-900/20 text-amber-500 border border-amber-900/50' : 'text-neutral-400 hover:bg-neutral-900'}`}
-              >
-                  <IconWardrobe className={`w-5 h-5 ${activeTab === 'WARDROBE' ? 'text-amber-500' : 'text-neutral-400 group-hover:text-white'}`} filled={activeTab === 'WARDROBE'} />
-                  <span className="font-bold text-sm tracking-wide">Гардероб</span>
-              </button>
-              <button 
-                onClick={() => setActiveTab('PROFILE')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all group ${activeTab === 'PROFILE' ? 'bg-amber-900/20 text-amber-500 border border-amber-900/50' : 'text-neutral-400 hover:bg-neutral-900'}`}
-              >
-                  <IconProfile className={`w-5 h-5 ${activeTab === 'PROFILE' ? 'text-amber-500' : 'text-neutral-400 group-hover:text-white'}`} filled={activeTab === 'PROFILE'} />
-                  <span className="font-bold text-sm tracking-wide">Профиль</span>
-              </button>
-          </nav>
-
-          {!isPro && (
-             <div className="bg-gradient-to-br from-amber-900/40 to-black border border-amber-700/30 p-4 rounded-xl mt-auto">
-                 <h4 className="text-white font-bold text-sm mb-1">Go Pro</h4>
-                 <p className="text-[10px] text-neutral-400 mb-3">Разблокируй все возможности</p>
-                 <button onClick={handleBuyProClick} className="w-full bg-amber-600 text-black text-xs font-bold py-2 rounded">
-                     Купить AI+
-                 </button>
-             </div>
-          )}
-      </aside>
-
-      {/* MOBILE CONTENT AREA (With Bottom Padding) */}
-      <main className="flex-1 md:ml-64 w-full relative h-screen overflow-y-auto">
-          {/* Mobile Header */}
-          <header className="md:hidden sticky top-0 z-40 bg-black/80 backdrop-blur border-b border-neutral-800 px-4 h-16 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                 <div className="w-6 h-6 border border-neutral-700 flex items-center justify-center bg-neutral-900">
-                   <span className="font-serif text-sm text-amber-500">S</span>
-                 </div>
-                 <span className="font-serif text-white tracking-widest text-sm">STYLEVISION</span>
-              </div>
-              {!isPro && <button onClick={handleBuyProClick} className="bg-amber-600 text-black text-[10px] font-bold px-3 py-1 rounded-full">AI+</button>}
-          </header>
-
-          <div className="p-4 md:p-8 pb-24 md:pb-8">
-             {activeTab === 'STUDIO' && renderStudio()}
-             {activeTab === 'WARDROBE' && renderWardrobe()}
-             {activeTab === 'PROFILE' && renderProfile()}
-          </div>
-      </main>
-
-      {/* MOBILE BOTTOM NAV */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-black border-t border-neutral-800 h-16 grid grid-cols-3 pb-safe">
-          <button 
-            onClick={() => { triggerHaptic('selection'); setActiveTab('STUDIO'); }}
-            className={`flex flex-col items-center justify-center gap-1 ${activeTab === 'STUDIO' ? 'text-amber-500' : 'text-neutral-500'}`}
-          >
-              <IconStudio className="w-6 h-6" filled={activeTab === 'STUDIO'} />
-              <span className="text-[10px] font-bold uppercase tracking-wider">Студия</span>
-          </button>
-          <button 
-            onClick={() => { triggerHaptic('selection'); setActiveTab('WARDROBE'); }}
-            className={`flex flex-col items-center justify-center gap-1 ${activeTab === 'WARDROBE' ? 'text-amber-500' : 'text-neutral-500'}`}
-          >
-              <IconWardrobe className="w-6 h-6" filled={activeTab === 'WARDROBE'} />
-              <span className="text-[10px] font-bold uppercase tracking-wider">Гардероб</span>
-          </button>
-          <button 
-            onClick={() => { triggerHaptic('selection'); setActiveTab('PROFILE'); }}
-            className={`flex flex-col items-center justify-center gap-1 ${activeTab === 'PROFILE' ? 'text-amber-500' : 'text-neutral-500'}`}
-          >
-              <IconProfile className="w-6 h-6" filled={activeTab === 'PROFILE'} />
-              <span className="text-[10px] font-bold uppercase tracking-wider">Профиль</span>
-          </button>
-      </nav>
-
-      {/* OVERLAYS */}
-      {showAdminPanel && isAdmin(user.id) && (
-         <AdminPanel onClose={() => setShowAdminPanel(false)} currentUserId={user.id} />
-      )}
-      {showAuthRequest && (
-          <LoginScreen onLogin={handleUpgradeAccount} isOverlay={true} onCancel={() => setShowAuthRequest(false)} />
-      )}
-      {showPaymentModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in overflow-y-auto">
-             <div className="relative w-full max-w-lg bg-[#0a0a0a] border border-neutral-800 rounded-2xl p-6 md:p-8 shadow-2xl my-auto">
-                <button onClick={() => setShowPaymentModal(false)} className="absolute top-4 right-4 text-neutral-500 hover:text-white">
-                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
-                <div className="relative z-10 text-center">
-                    <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-amber-400 to-amber-700 p-[1px]">
-                        <div className="w-full h-full rounded-full bg-black flex items-center justify-center">
-                            <span className="font-serif text-3xl text-amber-500 italic">S</span>
-                        </div>
-                    </div>
-                    {!pendingPaymentId ? (
-                        <>
-                            <h2 className="text-2xl font-serif text-white mb-1">Выберите тариф</h2>
-                            <p className="text-neutral-400 text-sm mb-6">Разблокируйте все возможности StyleVision AI+</p>
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-                                {SUBSCRIPTION_PLANS.map(plan => (
-                                    <div 
-                                        key={plan.id}
-                                        onClick={() => { triggerHaptic('selection'); setSelectedPlan(plan); }}
-                                        className={`
-                                            relative cursor-pointer p-4 rounded-xl border transition-all duration-300 flex flex-col items-center justify-center
-                                            ${selectedPlan.id === plan.id 
-                                                ? 'bg-neutral-800 border-amber-500 shadow-lg shadow-amber-900/20 transform scale-105 z-10' 
-                                                : 'bg-neutral-900/50 border-neutral-800 hover:bg-neutral-800 hover:border-neutral-700 opacity-80 hover:opacity-100'}
-                                        `}
-                                    >
-                                        {plan.isBestValue && (
-                                            <div className="absolute -top-2.5 bg-amber-600 text-black text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
-                                                Best Value
-                                            </div>
-                                        )}
-                                        <div className="text-sm text-neutral-400 mb-1 font-medium">{plan.label}</div>
-                                        <div className={`text-xl font-bold mb-1 ${selectedPlan.id === plan.id ? 'text-white' : 'text-neutral-200'}`}>
-                                            {plan.price} ₽
-                                        </div>
-                                        <div className="text-[10px] text-amber-600 font-medium uppercase tracking-wider">
-                                            {plan.description}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                            <button 
-                                onClick={() => initiatePayment(selectedPlan)}
-                                disabled={isProcessing}
-                                className="w-full bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-black font-bold py-4 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg"
-                            >
-                                {isProcessing ? (
-                                    <div className="animate-spin w-5 h-5 border-2 border-black border-t-transparent rounded-full"></div>
-                                ) : (
-                                    <><span>Оплатить {selectedPlan.price} ₽</span></>
-                                )}
-                            </button>
-                        </>
-                    ) : (
-                        <div className="animate-fade-in">
-                            <h2 className="text-xl font-serif text-white mb-4">Ожидание оплаты...</h2>
-                            <button onClick={cancelPendingPayment} className="text-xs text-neutral-500 hover:text-white border-b border-neutral-700 hover:border-white pb-0.5 transition-all">Отменить</button>
-                        </div>
-                    )}
-                </div>
-            </div>
-        </div>
-      )}
-      {showGuestLockModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in">
-             <div className="relative w-full max-w-md bg-[#0a0a0a] border border-amber-900/50 rounded-2xl p-8 shadow-2xl overflow-hidden">
-                <button onClick={() => setShowGuestLockModal(false)} className="absolute top-4 right-4 text-neutral-500 hover:text-white">X</button>
-                <div className="text-center">
-                    <h2 className="text-2xl font-serif text-white mb-3">Только для авторизованных</h2>
-                    <button onClick={handleGuestToLogin} className="w-full bg-white text-black font-bold py-3.5 rounded-xl">Войти через Telegram</button>
-                </div>
-            </div>
-         </div>
-      )}
-      {showLimitModal && (
-         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in">
-             <div className="relative w-full max-w-md bg-[#0a0a0a] border border-amber-900/50 rounded-2xl p-8 shadow-2xl overflow-hidden">
-                <button onClick={() => setShowLimitModal(false)} className="absolute top-4 right-4 text-neutral-500 hover:text-white">X</button>
-                <div className="text-center">
-                    <h2 className="text-2xl font-serif text-white mb-3">Лимит исчерпан</h2>
-                    <button onClick={handleBuyProClick} className="w-full bg-amber-600 text-black font-bold py-3.5 rounded-xl">Снять лимиты</button>
-                </div>
-            </div>
-         </div>
-      )}
     </div>
   );
 };
