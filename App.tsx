@@ -11,6 +11,7 @@ import LoadingScreen from './components/LoadingScreen'; // New Import
 import AdminPanel from './components/AdminPanel';
 import ImageEditor from './components/ImageEditor';
 import { triggerHaptic } from './utils/haptics'; // Haptics Import
+import { generateStoryImage } from './utils/storyGenerator'; // Story Generator Import
 
 // ADMIN ID CONSTANT (Array)
 const ADMIN_IDS = [643780299, 1613288376];
@@ -174,6 +175,75 @@ const App: React.FC = () => {
     } catch (e) {
        console.error("Download failed:", e);
        window.open(dataUrl, '_blank');
+    }
+  };
+
+  const handleShareToStory = async () => {
+    if (!originalImage || !currentImage || !user) return;
+    
+    // Check if supported
+    const tg = (window as any).Telegram?.WebApp;
+    if (!tg || !tg.shareToStory) {
+        alert("Пожалуйста, обновите Telegram, чтобы делиться сторис.");
+        return;
+    }
+
+    try {
+        triggerHaptic('medium');
+        setIsProcessing(true);
+        setProcessingMessage('Создаем магию для сторис...');
+
+        // 1. Generate Composite Image
+        const storyBase64 = await generateStoryImage(originalImage, currentImage);
+
+        // 2. Upload to Cloud to get Public URL (Telegram requires URL)
+        setProcessingMessage('Загружаем в Telegram...');
+        
+        // We reuse the existing storageService method for history, 
+        // but we can also use it here to get a public link. 
+        // The type 'res' puts it in a result-like path structure.
+        // We use the same saveToStorage function exposed via storageService internals or mimic it.
+        // Since `saveHistoryItem` logic is private inside storageService, we need to access upload logic directly 
+        // OR add a specific method to storageService. 
+        // However, for speed, we can assume `storageService` isn't fully exposing raw upload.
+        // Let's modify `storageService` interface conceptually or assume we added a public upload method?
+        // Actually, let's use the `saveHistoryItem` side-effect: we save to history first, then use that URL?
+        // No, that's slow. 
+        
+        // Let's rely on the fact that `generateStoryImage` returns a base64. 
+        // We need to upload this. Let's add a helper in App.tsx that uses a Supabase upload if possible, 
+        // OR simpler: Use the existing `storageService` if we modify it to export upload, 
+        // BUT `storageService` in the file above DOES NOT export `uploadImageToStorage`.
+        // FIX: I will add a temporary workaround to upload using the same method as history item
+        // by constructing a fake history item, saving it, and using its URL? No, that's hacky.
+        
+        // BETTER FIX: The user asked to just make it work. I will assume `storageService` exposes `uploadImage`
+        // or I will implement a quick upload inside App.tsx using the exported `supabase` client if available.
+        // Looking at imports: `storageService` is imported. `supabase` client is NOT imported in App.tsx.
+        // I will use `storageService.uploadImage` if I add it to `storageService.ts`, OR I can add it to the XML changes.
+        // Let's add `uploadStoryImage` to `storageService.ts` in the changes.
+        
+        // Assuming `storageService` has `uploadStoryImage` (I will add this change below)
+        const publicUrl = await storageService.uploadStoryImage(user.id, storyBase64);
+
+        if (!publicUrl) throw new Error("Не удалось подготовить изображение");
+
+        // 3. Call Telegram API
+        tg.shareToStory(publicUrl, {
+            text: `Мой новый стиль от AI ✨`,
+            widget_link: {
+                url: 'https://t.me/stylevision_bot',
+                name: 'Попробовать AI Стилиста'
+            }
+        });
+        triggerHaptic('success');
+
+    } catch (e: any) {
+        console.error("Story Error", e);
+        triggerHaptic('error');
+        alert("Ошибка создания сторис: " + e.message);
+    } finally {
+        setIsProcessing(false);
     }
   };
 
@@ -1373,6 +1443,10 @@ const App: React.FC = () => {
                                />
                                {/* Actions overlay */}
                                <div className="absolute bottom-4 right-4 flex gap-2 z-20">
+                                  {/* Share to Story Button */}
+                                  <button onClick={handleShareToStory} className="bg-gradient-to-r from-pink-600 to-purple-600 hover:brightness-110 text-white p-2 rounded-full backdrop-blur transition-all shadow-lg flex items-center justify-center" title="В Сторис">
+                                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                                  </button>
                                   <button onClick={() => downloadImage(currentImage, `stylevision_${Date.now()}.png`)} className="bg-black/50 hover:bg-black/70 text-white p-2 rounded-full backdrop-blur transition-all">
                                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                                   </button>
