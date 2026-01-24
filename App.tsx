@@ -255,9 +255,6 @@ const App: React.FC = () => {
     await storageService.deleteHistoryItem(user.id, itemId);
   };
 
-  // ... (rest of App.tsx remains same, reusing existing code above just for the handleShareStory change context) ...
-  // Since I need to return the full file content, I will paste the full file below.
-
   // --- RETRY LOGIC WRAPPER ---
   const withRetry = async <T,>(fn: () => Promise<T>, attempts: number = 3, baseDelay: number = 1500): Promise<T> => {
       for (let i = 0; i < attempts; i++) {
@@ -1088,7 +1085,24 @@ const App: React.FC = () => {
                     {!pendingPaymentId ? (
                         <>
                             <h2 className="text-2xl font-serif text-white mb-1">Выберите тариф</h2>
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6 mt-6">
+                            
+                            {/* NEW: Benefits Section */}
+                            <div className="bg-neutral-900/50 border border-neutral-800 rounded-xl p-4 mb-6 mt-4 text-left">
+                                <h3 className="text-white font-medium mb-3 text-sm">Преимущества AI+:</h3>
+                                <ul className="space-y-2">
+                                    <li className="flex items-center gap-2 text-xs text-neutral-300">
+                                        <span className="text-amber-500 font-bold">✓</span> Снятие всех лимитов
+                                    </li>
+                                    <li className="flex items-center gap-2 text-xs text-neutral-300">
+                                        <span className="text-amber-500 font-bold">✓</span> Генерация без очередей
+                                    </li>
+                                    <li className="flex items-center gap-2 text-xs text-neutral-300">
+                                        <span className="text-amber-500 font-bold">✓</span> Доступ к премиум стилям
+                                    </li>
+                                </ul>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
                                 {SUBSCRIPTION_PLANS.map(plan => (
                                     <div 
                                         key={plan.id}
@@ -1100,11 +1114,14 @@ const App: React.FC = () => {
                                                 : 'bg-neutral-900/50 border-neutral-800 hover:bg-neutral-800 hover:border-neutral-700 opacity-80 hover:opacity-100'}
                                         `}
                                     >
-                                        <div className={`text-xl font-bold mb-1 ${selectedPlan.id === plan.id ? 'text-white' : 'text-neutral-200'}`}>
-                                            {plan.price} ₽
-                                        </div>
-                                        <div className="text-[10px] text-amber-600 font-medium uppercase tracking-wider">
+                                        <div className="text-[10px] text-amber-600 font-bold uppercase tracking-wider mb-1">
                                             {plan.description}
+                                        </div>
+                                        <div className="text-sm text-neutral-400 font-medium mb-1">
+                                            {plan.label}
+                                        </div>
+                                        <div className={`text-xl font-bold ${selectedPlan.id === plan.id ? 'text-white' : 'text-neutral-200'}`}>
+                                            {plan.price} ₽
                                         </div>
                                     </div>
                                 ))}
