@@ -22,7 +22,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, currentUserId }) => {
       price: "1.00", 
       productTitle: "", 
       productDescription: "", 
-      maintenanceMode: false 
+      maintenanceMode: false,
+      freeLimit: 3,
+      freeCooldownHours: 8,
+      subscriptionPrices: {
+          month_1: 490,
+          month_3: 650,
+          month_6: 850
+      }
   });
 
   useEffect(() => {
@@ -240,16 +247,75 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, currentUserId }) => {
                                 </label>
                              </div>
 
-                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="text-xs text-neutral-500 mb-1 block">Стоимость (RUB)</label>
-                                    <input 
-                                        type="text" 
-                                        value={config.price}
-                                        onChange={(e) => setConfig({...config, price: e.target.value})}
-                                        className="w-full bg-black border border-neutral-700 rounded p-2 text-white"
-                                    />
+                             {/* Limits Configuration */}
+                             <div className="mb-6 border-b border-neutral-800 pb-6">
+                                <h4 className="text-sm text-neutral-400 font-bold uppercase tracking-wider mb-4">Лимиты для бесплатных пользователей</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-xs text-neutral-500 mb-1 block">Лимит генераций</label>
+                                        <input 
+                                            type="number" 
+                                            value={config.freeLimit || 3}
+                                            onChange={(e) => setConfig({...config, freeLimit: parseInt(e.target.value) || 0})}
+                                            className="w-full bg-black border border-neutral-700 rounded p-2 text-white"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs text-neutral-500 mb-1 block">Период ожидания (часов)</label>
+                                        <input 
+                                            type="number" 
+                                            value={config.freeCooldownHours || 8}
+                                            onChange={(e) => setConfig({...config, freeCooldownHours: parseInt(e.target.value) || 0})}
+                                            className="w-full bg-black border border-neutral-700 rounded p-2 text-white"
+                                        />
+                                    </div>
                                 </div>
+                             </div>
+
+                             {/* Subscription Prices */}
+                             <div className="mb-6 border-b border-neutral-800 pb-6">
+                                <h4 className="text-sm text-neutral-400 font-bold uppercase tracking-wider mb-4">Цены Подписок (RUB)</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div>
+                                        <label className="text-xs text-neutral-500 mb-1 block">1 Месяц</label>
+                                        <input 
+                                            type="number" 
+                                            value={config.subscriptionPrices?.month_1 || 490}
+                                            onChange={(e) => setConfig({
+                                                ...config, 
+                                                subscriptionPrices: { ...config.subscriptionPrices, month_1: parseInt(e.target.value) || 0 }
+                                            })}
+                                            className="w-full bg-black border border-neutral-700 rounded p-2 text-white"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs text-neutral-500 mb-1 block">3 Месяца</label>
+                                        <input 
+                                            type="number" 
+                                            value={config.subscriptionPrices?.month_3 || 650}
+                                            onChange={(e) => setConfig({
+                                                ...config, 
+                                                subscriptionPrices: { ...config.subscriptionPrices, month_3: parseInt(e.target.value) || 0 }
+                                            })}
+                                            className="w-full bg-black border border-neutral-700 rounded p-2 text-white"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs text-neutral-500 mb-1 block">6 Месяцев</label>
+                                        <input 
+                                            type="number" 
+                                            value={config.subscriptionPrices?.month_6 || 850}
+                                            onChange={(e) => setConfig({
+                                                ...config, 
+                                                subscriptionPrices: { ...config.subscriptionPrices, month_6: parseInt(e.target.value) || 0 }
+                                            })}
+                                            className="w-full bg-black border border-neutral-700 rounded p-2 text-white"
+                                        />
+                                    </div>
+                                </div>
+                             </div>
+
+                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label className="text-xs text-neutral-500 mb-1 block">Заголовок продукта</label>
                                     <input 
@@ -260,7 +326,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, currentUserId }) => {
                                     />
                                 </div>
                                 <div className="md:col-span-2">
-                                    <label className="text-xs text-neutral-500 mb-1 block">Описание преимуществ (Что получает клиент)</label>
+                                    <label className="text-xs text-neutral-500 mb-1 block">Описание преимуществ</label>
                                     <textarea 
                                         value={config.productDescription}
                                         onChange={(e) => setConfig({...config, productDescription: e.target.value})}
@@ -268,7 +334,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, currentUserId }) => {
                                     />
                                 </div>
                                 <div className="md:col-span-2">
-                                    <button onClick={handleSaveConfig} className="bg-green-600 text-white font-bold px-4 py-2 rounded hover:bg-green-500">
+                                    <button onClick={handleSaveConfig} className="bg-green-600 text-white font-bold px-4 py-2 rounded hover:bg-green-500 w-full md:w-auto">
                                         Сохранить настройки
                                     </button>
                                 </div>

@@ -7,10 +7,17 @@ const STORAGE_PREFIX = 'stylevision_';
 const SYSTEM_USER_ID = -100; // Special ID for system config storage
 
 export interface GlobalConfig {
-    price: string;
+    price: string; // Deprecated single price, kept for backward compat if needed, but we use subscriptionPrices now
     productTitle: string;
     productDescription: string;
     maintenanceMode: boolean;
+    freeLimit: number;
+    freeCooldownHours: number;
+    subscriptionPrices: {
+        month_1: number;
+        month_3: number;
+        month_6: number;
+    };
 }
 
 // Helper: Robustly Convert Base64 to Blob for upload
@@ -349,10 +356,17 @@ export const storageService = {
 
   getGlobalConfig: async (): Promise<GlobalConfig> => {
     const defaultConfig: GlobalConfig = {
-        price: "1.00",
+        price: "490.00", // Legacy fallback
         productTitle: "StyleVision AI+",
         productDescription: "Неограниченный доступ ко всем функциям",
-        maintenanceMode: false
+        maintenanceMode: false,
+        freeLimit: 3, // Increased to 3
+        freeCooldownHours: 8, // Increased to 8 hours
+        subscriptionPrices: {
+            month_1: 490,
+            month_3: 650,
+            month_6: 850
+        }
     };
 
     try {
@@ -366,6 +380,7 @@ export const storageService = {
         
         try {
             const parsed = JSON.parse(data.last_name);
+            // Merge allows adding new fields (like prices) without breaking old saved configs
             return { ...defaultConfig, ...parsed };
         } catch {
             return defaultConfig;

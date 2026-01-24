@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { analyzeUserImage, getStyleRecommendations, editUserImage, IS_DEMO_MODE } from './services/geminiService';
 import { createPayment, PaymentResponse, checkPaymentStatus } from './services/paymentService';
 import { storageService, GlobalConfig } from './services/storageService'; 
@@ -17,9 +17,7 @@ import { generateStoryImage } from './utils/storyGenerator'; // Story Generator
 const ADMIN_IDS = [643780299, 1613288376];
 const MODERATOR_ID = 999999; // Special ID used in LoginScreen for moderator
 
-const FREE_LIMIT = 2; // Max generations per 5 hours
-
-// SUBSCRIPTION PLANS CONFIGURATION
+// SUBSCRIPTION PLANS CONFIGURATION INTERFACE
 interface SubscriptionPlan {
   id: string;
   months: number;
@@ -28,31 +26,6 @@ interface SubscriptionPlan {
   description: string;
   isBestValue?: boolean;
 }
-
-const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
-  { 
-    id: 'month_1', 
-    months: 1, 
-    price: 490, 
-    label: '1 Месяц', 
-    description: 'Старт' 
-  },
-  { 
-    id: 'month_3', 
-    months: 3, 
-    price: 650, 
-    label: '3 Месяца', 
-    description: 'Выгодно' 
-  },
-  { 
-    id: 'month_6', 
-    months: 6, 
-    price: 850, 
-    label: '6 Месяцев', 
-    description: 'Максимум',
-    isBestValue: true
-  }
-];
 
 // Configuration for available stores
 const INITIAL_STORES: Store[] = [
@@ -84,11 +57,44 @@ const App: React.FC = () => {
   
   // Config State
   const [globalConfig, setGlobalConfig] = useState<GlobalConfig>({ 
-      price: "490.00", // Default display price
+      price: "490.00", 
       productTitle: "StyleVision AI+", 
       productDescription: "",
-      maintenanceMode: false
+      maintenanceMode: false,
+      freeLimit: 3,
+      freeCooldownHours: 8,
+      subscriptionPrices: {
+          month_1: 490,
+          month_3: 650,
+          month_6: 850
+      }
   });
+  
+  // Derive subscription plans from config
+  const subscriptionPlans: SubscriptionPlan[] = useMemo(() => [
+      { 
+        id: 'month_1', 
+        months: 1, 
+        price: globalConfig.subscriptionPrices.month_1, 
+        label: '1 Месяц', 
+        description: 'Старт' 
+      },
+      { 
+        id: 'month_3', 
+        months: 3, 
+        price: globalConfig.subscriptionPrices.month_3, 
+        label: '3 Месяца', 
+        description: 'Выгодно' 
+      },
+      { 
+        id: 'month_6', 
+        months: 6, 
+        price: globalConfig.subscriptionPrices.month_6, 
+        label: '6 Месяцев', 
+        description: 'Максимум',
+        isBestValue: true
+      }
+  ], [globalConfig.subscriptionPrices]);
   
   // Overlays
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -100,9 +106,18 @@ const App: React.FC = () => {
   
   // Payment Pending Logic
   const [pendingPaymentId, setPendingPaymentId] = useState<string | null>(null);
-  const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan>(SUBSCRIPTION_PLANS[1]); // Default to 3 months
+  const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan | null>(null);
   const [isPollingPayment, setIsPollingPayment] = useState(false);
   const paymentPollInterval = useRef<any>(null);
+
+  // Set default plan when config loads
+  useEffect(() => {
+      if (subscriptionPlans.length > 1) {
+          setSelectedPlan(subscriptionPlans[1]);
+      } else if (subscriptionPlans.length > 0) {
+          setSelectedPlan(subscriptionPlans[0]);
+      }
+  }, [subscriptionPlans]);
 
   // Data State
   const [originalImage, setOriginalImage] = useState<string | null>(null);
@@ -449,8 +464,9 @@ const App: React.FC = () => {
      if (!user) return false;
      if (isPro) return true;
 
-     const count = await storageService.getRecentGenerationsCount(user.id, 5); 
-     if (count >= FREE_LIMIT) {
+     // Use dynamic limits from config
+     const count = await storageService.getRecentGenerationsCount(user.id, globalConfig.freeCooldownHours); 
+     if (count >= globalConfig.freeLimit) {
          triggerHaptic('warning');
          setShowLimitModal(true);
          return false;
@@ -991,7 +1007,7 @@ const App: React.FC = () => {
                     </div>
                     <h2 className="text-2xl font-serif text-white mb-3">Лимит исчерпан</h2>
                     <p className="text-neutral-400 text-sm mb-6 leading-relaxed">
-                        В бесплатной версии доступно только <strong>{FREE_LIMIT} генерации</strong> каждые 5 часов. 
+                        В бесплатной версии доступно только <strong>{globalConfig.freeLimit} генерации</strong> каждые {globalConfig.freeCooldownHours} часов. 
                         Вы можете подождать или снять все ограничения прямо сейчас.
                     </p>
                     <div className="space-y-3">
@@ -999,7 +1015,7 @@ const App: React.FC = () => {
                             onClick={handleBuyProClick}
                             className="w-full bg-gradient-to-r from-amber-600 to-amber-500 text-black font-bold py-3.5 rounded-xl hover:brightness-110 transition-all shadow-lg"
                         >
-                            Снять лимиты за {SUBSCRIPTION_PLANS[0].price}₽
+                            Снять лимиты за {subscriptionPlans[0]?.price || '490'}₽
                         </button>
                         <button 
                             onClick={() => setShowLimitModal(false)}
@@ -1103,13 +1119,13 @@ const App: React.FC = () => {
                             </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-                                {SUBSCRIPTION_PLANS.map(plan => (
+                                {subscriptionPlans.map(plan => (
                                     <div 
                                         key={plan.id}
                                         onClick={() => { triggerHaptic('selection'); setSelectedPlan(plan); }}
                                         className={`
                                             relative cursor-pointer p-4 rounded-xl border transition-all duration-300 flex flex-col items-center justify-center
-                                            ${selectedPlan.id === plan.id 
+                                            ${selectedPlan?.id === plan.id 
                                                 ? 'bg-neutral-800 border-amber-500 shadow-lg shadow-amber-900/20 transform scale-105 z-10' 
                                                 : 'bg-neutral-900/50 border-neutral-800 hover:bg-neutral-800 hover:border-neutral-700 opacity-80 hover:opacity-100'}
                                         `}
@@ -1120,21 +1136,21 @@ const App: React.FC = () => {
                                         <div className="text-sm text-neutral-400 font-medium mb-1">
                                             {plan.label}
                                         </div>
-                                        <div className={`text-xl font-bold ${selectedPlan.id === plan.id ? 'text-white' : 'text-neutral-200'}`}>
+                                        <div className={`text-xl font-bold ${selectedPlan?.id === plan.id ? 'text-white' : 'text-neutral-200'}`}>
                                             {plan.price} ₽
                                         </div>
                                     </div>
                                 ))}
                             </div>
                             <button 
-                                onClick={() => initiatePayment(selectedPlan)}
-                                disabled={isProcessing}
-                                className="w-full bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-black font-bold py-4 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg"
+                                onClick={() => selectedPlan && initiatePayment(selectedPlan)}
+                                disabled={isProcessing || !selectedPlan}
+                                className="w-full bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-black font-bold py-4 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 {isProcessing ? (
                                     <div className="animate-spin w-5 h-5 border-2 border-black border-t-transparent rounded-full"></div>
                                 ) : (
-                                    <><span>Оплатить {selectedPlan.price} ₽</span></>
+                                    <><span>Оплатить {selectedPlan?.price} ₽</span></>
                                 )}
                             </button>
                         </>
