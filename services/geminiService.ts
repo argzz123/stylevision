@@ -16,7 +16,8 @@ const getMimeType = (base64: string) => {
 };
 
 // --- IMAGE COMPRESSION & CONVERSION UTILITY ---
-const compressImage = (imageSource: string, maxWidth = 1024, quality = 0.8): Promise<string> => {
+// Exported so App.tsx can use it for Wardrobe uploads
+export const compressImage = (imageSource: string, maxWidth = 1024, quality = 0.8): Promise<string> => {
   return new Promise((resolve) => {
     const img = new Image();
     // CRITICAL FIX: Allow loading images from Supabase Storage (cross-origin)
@@ -521,4 +522,80 @@ export const editUserImage = async (
     console.error("Gemini Image Edit Error:", error);
     throw mapFriendlyError(error);
   }
+};
+
+/**
+ * NEW: Virtual Try-On for Wardrobe Items
+ * Takes user image + multiple wardrobe images and edits the user image.
+ */
+export const tryOnWardrobeItems = async (
+    userImage: string,
+    wardrobeImages: string[],
+    onStatusUpdate?: (msg: string) => void
+): Promise<string> => {
+    if (IS_DEMO_MODE) return userImage;
+
+    const model = 'gemini-2.5-flash-image'; // Using vision capabilities for editing
+
+    // Compress main user image
+    if (onStatusUpdate) onStatusUpdate("Подготовка фото...");
+    const compressedUserImage = await compressImage(userImage, 1024, 0.85);
+
+    const parts: any[] = [
+        { inlineData: { data: cleanBase64(compressedUserImage), mimeType: 'image/jpeg' } }
+    ];
+
+    // Compress and add wardrobe images (up to 10 as per UI, but technically model limit is token based)
+    // We treat them as reference images in the prompt context essentially
+    let itemIndex = 1;
+    for (const itemImg of wardrobeImages) {
+        const compressedItem = await compressImage(itemImg, 512, 0.8); // Smaller for items
+        parts.push({ 
+            inlineData: { data: cleanBase64(compressedItem), mimeType: 'image/jpeg' } 
+        });
+        itemIndex++;
+    }
+
+    const prompt = `
+        TASK: High-Fidelity Virtual Try-On.
+        Input 1 is the MODEL (Person).
+        Inputs 2 to ${itemIndex} are CLOTHING ITEMS from the user's wardrobe.
+        
+        ACTION: Dress the MODEL in the provided CLOTHING ITEMS.
+        
+        STRICT CONSTRAINTS:
+        1. PRESERVE FACIAL IDENTITY 100%. Do not change the face.
+        2. PRESERVE BODY POSE 100%. Do not change the pose.
+        3. Replace the model's current outfit with the provided wardrobe items.
+        4. If multiple items are provided (e.g. top and bottom), combine them into a cohesive outfit.
+        5. Ensure realistic fabric physics, lighting, and shadows matching the original photo.
+        6. Output High Resolution Photorealistic Image.
+    `;
+
+    parts.push({ text: prompt });
+
+    try {
+        if (onStatusUpdate) onStatusUpdate("Примерка вещей (это займет около 20 сек)...");
+        
+        const response = await callGeminiProxy(
+            model,
+            { parts: parts },
+            undefined,
+            undefined,
+            onStatusUpdate
+        );
+
+        for (const candidate of response.candidates || []) {
+            for (const part of candidate.content.parts || []) {
+                if (part.inlineData) {
+                    return `data:image/png;base64,${part.inlineData.data}`;
+                }
+            }
+        }
+        throw new Error("No image data in response");
+
+    } catch (error: any) {
+        console.error("Try On Error:", error);
+        throw mapFriendlyError(error);
+    }
 };

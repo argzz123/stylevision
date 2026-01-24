@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { analyzeUserImage, getStyleRecommendations, editUserImage, IS_DEMO_MODE } from './services/geminiService';
+import { analyzeUserImage, getStyleRecommendations, editUserImage, compressImage, tryOnWardrobeItems, IS_DEMO_MODE } from './services/geminiService';
 import { createPayment, PaymentResponse, checkPaymentStatus } from './services/paymentService';
 import { storageService, GlobalConfig } from './services/storageService'; 
 import { AppState, UserAnalysis, StyleRecommendation, AnalysisMode, Store, Season, Occasion, HistoryItem, MobileTab, TelegramUser, WardrobeItem, WardrobeCategory, UserProfilePreferences } from './types';
@@ -17,6 +17,32 @@ const ADMIN_IDS = [643780299, 1613288376];
 const MODERATOR_ID = 999999; 
 
 const FREE_LIMIT = 2; 
+
+// Icons Components
+const IconStudio = ({ className, filled }: { className?: string, filled?: boolean }) => (
+    <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M9.66 7.22C10.09 3.52 13.91 3.52 14.34 7.22C14.71 10.43 17.57 13.29 20.78 13.66C24.48 14.09 24.48 17.91 20.78 18.34C17.57 18.71 14.71 21.57 14.34 24.78C13.91 28.48 10.09 28.48 9.66 24.78C9.29 21.57 6.43 18.71 3.22 18.34C-0.48 17.91 -0.48 14.09 3.22 13.66C6.43 13.29 9.29 10.43 9.66 7.22Z" stroke="currentColor" strokeWidth={filled ? "0" : "1.5"} fill={filled ? "currentColor" : "none"} transform="scale(0.6) translate(8,8)"/>
+        <path d="M12 2L12.5 4.5M12 22L11.5 19.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+        <path d="M22 12L19.5 11.5M2 12L4.5 12.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+        <rect x="7" y="7" width="10" height="10" rx="3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M10 10L14 14M14 10L10 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+);
+
+const IconWardrobe = ({ className, filled }: { className?: string, filled?: boolean }) => (
+    <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M20.9 7.6C20.7 7.1 20.3 6.7 19.8 6.5L14 4.1C13.4 3.9 12.7 3.9 12.1 4.1L6.2 6.5C5.7 6.7 5.3 7.1 5.1 7.6L3.3 12H20.7L18.9 7.6Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M3.3 12H20.7V19C20.7 20.1 19.8 21 18.7 21H5.3C4.2 21 3.3 20.1 3.3 19V12Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M12 4V21" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+);
+
+const IconProfile = ({ className, filled }: { className?: string, filled?: boolean }) => (
+    <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 12C14.7614 12 17 9.76142 17 7C17 4.23858 14.7614 2 12 2C9.23858 2 7 4.23858 7 7C7 9.76142 9.23858 12 12 12Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M20.59 22C20.59 18.13 16.746 15 12 15C7.254 15 3.41 18.13 3.41 22" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+);
 
 // SUBSCRIPTION PLANS CONFIGURATION
 interface SubscriptionPlan {
@@ -80,7 +106,7 @@ const App: React.FC = () => {
 
   // App Flow State (Studio)
   const [appState, setAppState] = useState<AppState>(AppState.UPLOAD);
-  const [setupStep, setSetupStep] = useState<number>(1);
+  const [setupStep, setSetupStep] = useState<number>(0); // 0: Choice, 1: AI Setup, 2: Stores/Config, 3: Wardrobe Select
   const [isPro, setIsPro] = useState(false);
   
   // Config State
@@ -123,6 +149,7 @@ const App: React.FC = () => {
   // New Data States
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [wardrobe, setWardrobe] = useState<WardrobeItem[]>([]);
+  const [selectedWardrobeItems, setSelectedWardrobeItems] = useState<string[]>([]);
   const [userPreferences, setUserPreferences] = useState<UserProfilePreferences>({ taboos: '', favoriteStyles: '' });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -394,7 +421,7 @@ const App: React.FC = () => {
      setCurrentImage(item.resultImage);
      setAppState(AppState.RESULTS);
      setActiveTab('STUDIO'); // Switch to Studio tab
-     setSetupStep(1); 
+     setSetupStep(0); 
      if (item.analysis) setAnalysis(item.analysis);
      if (item.recommendations) {
         setRecommendations(item.recommendations);
@@ -416,14 +443,15 @@ const App: React.FC = () => {
         setOriginalImage(base64);
         setCurrentImage(base64);
         setAppState(AppState.PREVIEW);
-        setSetupStep(1);
+        setSetupStep(0); // Reset to Choice Screen
         setAnalysisMode('STANDARD');
+        setSelectedWardrobeItems([]);
       };
       reader.readAsDataURL(file);
     }
   };
 
-  // Wardrobe Image Upload
+  // Wardrobe Image Upload with Compression
   const handleWardrobeUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (file && user) {
@@ -431,10 +459,13 @@ const App: React.FC = () => {
           const reader = new FileReader();
           reader.onloadend = async () => {
               const base64 = reader.result as string;
+              // Compress to avoid lag and save space
+              const compressedBase64 = await compressImage(base64, 800, 0.75);
+
               // Default category TOP, can be changed later or via prompt
               const newItem: WardrobeItem = {
                   id: Date.now().toString(),
-                  imageUrl: base64,
+                  imageUrl: compressedBase64,
                   category: 'TOP',
                   createdAt: new Date().toISOString()
               };
@@ -594,6 +625,75 @@ const App: React.FC = () => {
     } finally { setIsProcessing(false); }
   };
 
+  // New Function: Handle "Try On Wardrobe"
+  const handleWardrobeTryOn = async () => {
+      if (!originalImage || selectedWardrobeItems.length === 0) return;
+      if (user?.isGuest) {
+          triggerHaptic('warning');
+          setShowGuestLockModal(true);
+          return;
+      }
+      const canProceed = await checkLimit();
+      if (!canProceed) return;
+
+      try {
+          triggerHaptic('medium');
+          setAppState(AppState.ANALYZING); // Use loading screen
+          setIsProcessing(true);
+          setProcessingMessage('Примеряем выбранные вещи...');
+
+          // Get full base64 for selected items from wardrobe state
+          const itemsToTry = wardrobe
+              .filter(item => selectedWardrobeItems.includes(item.id))
+              .map(item => item.imageUrl);
+
+          // Use the new geminiService function
+          const newImage = await tryOnWardrobeItems(
+              originalImage,
+              itemsToTry,
+              (msg) => setProcessingMessage(msg)
+          );
+
+          setCurrentImage(newImage);
+          
+          // Fake analysis object for consistency in Results view
+          if (!analysis) {
+             setAnalysis({
+                 gender: 'Ваш стиль',
+                 bodyType: 'Персональный',
+                 seasonalColor: 'Гардероб',
+                 styleKeywords: ['Мой Гардероб', 'Примерка'],
+                 detailedDescription: 'Виртуальная примерка вещей из вашего гардероба.'
+             });
+          }
+          setRecommendations([]); // No recommendations for this flow
+          
+          setAppState(AppState.RESULTS);
+          saveToHistory(newImage, "Мой Гардероб (Примерка)");
+          triggerHaptic('success');
+
+      } catch (error: any) {
+          console.error(error);
+          triggerHaptic('error');
+          alert(error.message);
+          setAppState(AppState.PREVIEW); // Go back
+      } finally {
+          setIsProcessing(false);
+      }
+  };
+
+  const toggleWardrobeSelection = (id: string) => {
+      triggerHaptic('selection');
+      setSelectedWardrobeItems(prev => {
+          if (prev.includes(id)) return prev.filter(i => i !== id);
+          if (prev.length >= 10) {
+              alert("Можно выбрать максимум 10 вещей");
+              return prev;
+          }
+          return [...prev, id];
+      });
+  };
+
   const handleEdit = async (prompt: string, mask?: string) => {
      if (!currentImage || !prompt.trim()) return;
      if (user?.isGuest) {
@@ -626,11 +726,12 @@ const App: React.FC = () => {
   const resetApp = () => {
     triggerHaptic('light');
     setAppState(AppState.UPLOAD);
-    setSetupStep(1);
+    setSetupStep(0);
     setOriginalImage(null);
     setCurrentImage(null);
     setAnalysis(null);
     setRecommendations([]);
+    setSelectedWardrobeItems([]);
   };
 
   const handleLogout = () => {
@@ -730,9 +831,108 @@ const App: React.FC = () => {
                     <img src={originalImage} alt="Preview" className="w-full h-full object-cover opacity-90" />
                  </div>
 
-                 {/* Right: Setup */}
+                 {/* Right: Setup Flow */}
                  <div className="space-y-6">
-                    {setupStep === 1 ? (
+                    {/* Back Button (Appears if not in Choice mode or if Choice mode with no selections? Logic below) */}
+                    <div className="flex items-center gap-4 mb-4">
+                         <button 
+                            onClick={() => {
+                                triggerHaptic('light');
+                                if (setupStep === 0) setAppState(AppState.UPLOAD); // Back to Upload
+                                else if (setupStep === 3) setSetupStep(0); // Back from Wardrobe Select to Choice
+                                else setSetupStep(0); // Back from AI Setup to Choice
+                            }} 
+                            className="p-2 -ml-2 hover:bg-neutral-800 rounded-full text-neutral-500 hover:text-white flex items-center gap-2"
+                         >
+                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                             <span className="text-xs font-bold uppercase tracking-wide">Назад</span>
+                         </button>
+                    </div>
+
+                    {/* Step 0: CHOICE SCREEN */}
+                    {setupStep === 0 && (
+                        <div className="animate-fade-in space-y-4">
+                            <h2 className="text-2xl font-serif text-white mb-2">Что будем делать?</h2>
+                            <p className="text-neutral-500 text-sm mb-6">Выберите режим работы стилиста</p>
+
+                            <button 
+                                onClick={() => { triggerHaptic('selection'); setSetupStep(1); }}
+                                className="w-full bg-neutral-900 border border-neutral-800 p-6 rounded-xl hover:border-amber-600/50 transition-all group text-left relative overflow-hidden"
+                            >
+                                <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                                    <IconStudio className="w-24 h-24 text-amber-500" />
+                                </div>
+                                <h3 className="text-xl font-serif text-white mb-2 group-hover:text-amber-500 transition-colors">AI Стилист</h3>
+                                <p className="text-sm text-neutral-400 max-w-[80%]">
+                                    ИИ проанализирует вашу внешность и предложит новые стильные образы из магазинов.
+                                </p>
+                            </button>
+
+                            <button 
+                                onClick={() => { triggerHaptic('selection'); setSetupStep(3); }}
+                                className="w-full bg-neutral-900 border border-neutral-800 p-6 rounded-xl hover:border-amber-600/50 transition-all group text-left relative overflow-hidden"
+                            >
+                                <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                                    <IconWardrobe className="w-24 h-24 text-amber-500" />
+                                </div>
+                                <h3 className="text-xl font-serif text-white mb-2 group-hover:text-amber-500 transition-colors">Примерить свой гардероб</h3>
+                                <p className="text-sm text-neutral-400 max-w-[80%]">
+                                    Выберите вещи из своего виртуального гардероба, и ИИ наденет их на вас.
+                                </p>
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Step 3: WARDROBE SELECTION (New Flow) */}
+                    {setupStep === 3 && (
+                        <div className="animate-fade-in">
+                            <h2 className="text-2xl font-serif text-white mb-2">Выберите вещи</h2>
+                            <p className="text-neutral-500 text-sm mb-4">Отметьте до 10 вещей для примерки (выбрано: {selectedWardrobeItems.length})</p>
+                            
+                            {wardrobe.length === 0 ? (
+                                <div className="text-center py-12 border border-dashed border-neutral-800 rounded-xl bg-neutral-900/30">
+                                    <p className="text-neutral-400 text-sm mb-4">Ваш гардероб пуст</p>
+                                    <button 
+                                        onClick={() => setActiveTab('WARDROBE')}
+                                        className="text-amber-500 border border-amber-900/30 px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider hover:bg-amber-900/10"
+                                    >
+                                        Перейти в гардероб
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-3 gap-2 max-h-[400px] overflow-y-auto pr-2 mb-6 scrollbar-hide">
+                                    {wardrobe.map(item => (
+                                        <div 
+                                            key={item.id}
+                                            onClick={() => toggleWardrobeSelection(item.id)}
+                                            className={`
+                                                relative aspect-square rounded-lg overflow-hidden cursor-pointer border-2 transition-all
+                                                ${selectedWardrobeItems.includes(item.id) ? 'border-amber-500 opacity-100' : 'border-transparent border-neutral-800 opacity-60 hover:opacity-100'}
+                                            `}
+                                        >
+                                            <img src={item.imageUrl} className="w-full h-full object-cover" alt="Item" />
+                                            {selectedWardrobeItems.includes(item.id) && (
+                                                <div className="absolute top-1 right-1 w-5 h-5 bg-amber-500 rounded-full flex items-center justify-center">
+                                                    <svg className="w-3 h-3 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            <button 
+                                onClick={handleWardrobeTryOn}
+                                disabled={selectedWardrobeItems.length === 0}
+                                className="w-full bg-white text-black py-4 font-serif uppercase tracking-widest mt-4 hover:bg-amber-500 transition-colors rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Примерить
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Step 1: AI SETUP (Context) */}
+                    {setupStep === 1 && (
                       <div className="animate-fade-in">
                          <h2 className="text-2xl font-serif text-white mb-6">Создаем контекст</h2>
                          <div className="space-y-6">
@@ -781,12 +981,12 @@ const App: React.FC = () => {
                             <button onClick={() => { triggerHaptic('light'); setSetupStep(2); }} className="w-full bg-white text-black py-4 font-serif uppercase tracking-widest mt-4 hover:bg-neutral-200 transition-colors rounded">Далее</button>
                          </div>
                       </div>
-                    ) : (
+                    )}
+
+                    {/* Step 2: STORES & CONFIG (AI Flow) */}
+                    {setupStep === 2 && (
                       <div className="animate-fade-in">
                          <div className="flex items-center gap-4 mb-6">
-                           <button onClick={() => { triggerHaptic('light'); setSetupStep(1); }} className="p-2 -ml-2 hover:bg-neutral-800 rounded-full text-neutral-500 hover:text-white">
-                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-                           </button>
                            <h2 className="text-2xl font-serif text-white">Где искать вещи?</h2>
                          </div>
 
@@ -907,48 +1107,49 @@ const App: React.FC = () => {
                       {/* Analysis Block */}
                       {analysis && (
                           <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5 mt-6 animate-fade-in">
-                              <h3 className="text-lg font-serif text-white mb-3">Результаты Анализа</h3>
+                              <h3 className="text-lg font-serif text-white mb-3">Результаты</h3>
                               <div className="flex flex-wrap gap-2 mb-4">
-                                  <span className="px-3 py-1 rounded-full bg-neutral-800 text-xs text-neutral-300 border border-neutral-700">Пол: {analysis.gender}</span>
-                                  <span className="px-3 py-1 rounded-full bg-neutral-800 text-xs text-neutral-300 border border-neutral-700">Фигура: {analysis.bodyType}</span>
-                                  <span className="px-3 py-1 rounded-full bg-neutral-800 text-xs text-neutral-300 border border-neutral-700">Цветотип: {analysis.seasonalColor}</span>
+                                  <span className="px-3 py-1 rounded-full bg-neutral-800 text-xs text-neutral-300 border border-neutral-700">{analysis.gender}</span>
+                                  <span className="px-3 py-1 rounded-full bg-neutral-800 text-xs text-neutral-300 border border-neutral-700">{analysis.bodyType}</span>
                               </div>
                               <p className="text-sm text-neutral-400 leading-relaxed mb-4">{analysis.detailedDescription}</p>
-                              <div className="flex flex-wrap gap-2">
-                                  {analysis.styleKeywords.map((kw, i) => (
-                                      <span key={i} className="text-[10px] uppercase font-bold text-amber-600 tracking-wider">#{kw}</span>
-                                  ))}
-                              </div>
                           </div>
                       )}
                   </div>
 
                   {/* Right Column: Recommendations */}
                   <div className="space-y-6">
-                       <div className="flex items-center justify-between">
-                           <h3 className="font-serif text-2xl text-white">Рекомендации</h3>
-                           <span className="text-neutral-500 text-sm">{recommendations.length} образов</span>
-                       </div>
-                       
-                       <div className="grid grid-cols-1 gap-6">
-                           {recommendations.map(style => (
-                              <StyleCard 
-                                  key={style.id}
-                                  style={style}
-                                  isSelected={selectedStyleId === style.id}
-                                  onClick={() => { triggerHaptic('selection'); setSelectedStyleId(style.id); }}
-                                  onApplyStyle={() => handleApplyStyle(style)}
-                                  isGenerating={isProcessing && processingMessage.includes(style.title)}
-                                  isProcessingGlobal={isProcessing}
-                                  stores={stores}
-                               />
-                           ))}
-                           {recommendations.length === 0 && (
-                                <div className="text-center text-neutral-500 py-10 border border-neutral-800 rounded-xl bg-neutral-900/30">
-                                    <p>Нет рекомендаций. Попробуйте изменить параметры анализа или перезагрузить страницу.</p>
-                                </div>
-                           )}
-                       </div>
+                       {recommendations.length > 0 ? (
+                           <>
+                               <div className="flex items-center justify-between">
+                                   <h3 className="font-serif text-2xl text-white">Рекомендации</h3>
+                                   <span className="text-neutral-500 text-sm">{recommendations.length} образов</span>
+                               </div>
+                               
+                               <div className="grid grid-cols-1 gap-6">
+                                   {recommendations.map(style => (
+                                      <StyleCard 
+                                          key={style.id}
+                                          style={style}
+                                          isSelected={selectedStyleId === style.id}
+                                          onClick={() => { triggerHaptic('selection'); setSelectedStyleId(style.id); }}
+                                          onApplyStyle={() => handleApplyStyle(style)}
+                                          isGenerating={isProcessing && processingMessage.includes(style.title)}
+                                          isProcessingGlobal={isProcessing}
+                                          stores={stores}
+                                       />
+                                   ))}
+                               </div>
+                           </>
+                       ) : (
+                           <div className="text-center py-20 border border-neutral-800 rounded-xl bg-neutral-900/30 flex flex-col items-center">
+                                <IconWardrobe className="w-16 h-16 text-neutral-700 mb-4" />
+                                <h3 className="text-lg font-serif text-neutral-400 mb-2">Режим примерки гардероба</h3>
+                                <p className="text-sm text-neutral-600 max-w-xs">
+                                    В этом режиме мы не генерируем новые рекомендации, а работаем с вашими вещами. Используйте редактор слева для доработки образа.
+                                </p>
+                           </div>
+                       )}
                   </div>
               </div>
            </div>
@@ -974,7 +1175,6 @@ const App: React.FC = () => {
                   <div key={item.id} className="relative aspect-square border border-neutral-800 rounded-lg overflow-hidden group bg-neutral-900">
                       <img src={item.imageUrl} alt="Wardrobe Item" className="w-full h-full object-cover" />
                       <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2">
-                          <span className="text-[10px] text-neutral-400 uppercase tracking-wider mb-2 block">{item.category}</span>
                           <button 
                             onClick={(e) => handleDeleteWardrobeItem(e, item.id)}
                             className="w-full bg-red-900/50 text-red-400 text-xs py-1 rounded hover:bg-red-900"
@@ -1024,23 +1224,23 @@ const App: React.FC = () => {
               <div className="space-y-4">
                   <div>
                       <label className="block text-xs text-neutral-500 uppercase tracking-widest mb-2">
-                          Любимые стили (Что вам нравится)
+                          Любимые стили
                       </label>
                       <textarea 
                           value={userPreferences.favoriteStyles}
                           onChange={(e) => setUserPreferences({...userPreferences, favoriteStyles: e.target.value})}
-                          placeholder="Например: Минимализм, Old Money, Яркие цвета..."
+                          placeholder="Например: Минимализм, Old Money..."
                           className="w-full bg-black border border-neutral-800 rounded-lg p-3 text-sm text-white focus:border-amber-600 outline-none h-20"
                       />
                   </div>
                   <div>
                       <label className="block text-xs text-neutral-500 uppercase tracking-widest mb-2 text-red-400">
-                          Табу (Чего избегать)
+                          Табу
                       </label>
                       <textarea 
                           value={userPreferences.taboos}
                           onChange={(e) => setUserPreferences({...userPreferences, taboos: e.target.value})}
-                          placeholder="Например: Не ношу каблуки, избегаю желтый цвет..."
+                          placeholder="Например: Не ношу каблуки..."
                           className="w-full bg-black border border-neutral-800 rounded-lg p-3 text-sm text-white focus:border-red-900 outline-none h-20"
                       />
                   </div>
@@ -1123,23 +1323,23 @@ const App: React.FC = () => {
           <nav className="flex-1 space-y-4">
               <button 
                 onClick={() => setActiveTab('STUDIO')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'STUDIO' ? 'bg-amber-900/20 text-amber-500 border border-amber-900/50' : 'text-neutral-400 hover:bg-neutral-900'}`}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all group ${activeTab === 'STUDIO' ? 'bg-amber-900/20 text-amber-500 border border-amber-900/50' : 'text-neutral-400 hover:bg-neutral-900'}`}
               >
-                  <span>✨</span>
+                  <IconStudio className={`w-5 h-5 ${activeTab === 'STUDIO' ? 'text-amber-500' : 'text-neutral-400 group-hover:text-white'}`} filled={activeTab === 'STUDIO'} />
                   <span className="font-bold text-sm tracking-wide">Студия</span>
               </button>
               <button 
                 onClick={() => setActiveTab('WARDROBE')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'WARDROBE' ? 'bg-amber-900/20 text-amber-500 border border-amber-900/50' : 'text-neutral-400 hover:bg-neutral-900'}`}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all group ${activeTab === 'WARDROBE' ? 'bg-amber-900/20 text-amber-500 border border-amber-900/50' : 'text-neutral-400 hover:bg-neutral-900'}`}
               >
-                  <span>👗</span>
+                  <IconWardrobe className={`w-5 h-5 ${activeTab === 'WARDROBE' ? 'text-amber-500' : 'text-neutral-400 group-hover:text-white'}`} filled={activeTab === 'WARDROBE'} />
                   <span className="font-bold text-sm tracking-wide">Гардероб</span>
               </button>
               <button 
                 onClick={() => setActiveTab('PROFILE')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'PROFILE' ? 'bg-amber-900/20 text-amber-500 border border-amber-900/50' : 'text-neutral-400 hover:bg-neutral-900'}`}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all group ${activeTab === 'PROFILE' ? 'bg-amber-900/20 text-amber-500 border border-amber-900/50' : 'text-neutral-400 hover:bg-neutral-900'}`}
               >
-                  <span>👤</span>
+                  <IconProfile className={`w-5 h-5 ${activeTab === 'PROFILE' ? 'text-amber-500' : 'text-neutral-400 group-hover:text-white'}`} filled={activeTab === 'PROFILE'} />
                   <span className="font-bold text-sm tracking-wide">Профиль</span>
               </button>
           </nav>
@@ -1181,21 +1381,21 @@ const App: React.FC = () => {
             onClick={() => { triggerHaptic('selection'); setActiveTab('STUDIO'); }}
             className={`flex flex-col items-center justify-center gap-1 ${activeTab === 'STUDIO' ? 'text-amber-500' : 'text-neutral-500'}`}
           >
-              <span className="text-lg">✨</span>
+              <IconStudio className="w-6 h-6" filled={activeTab === 'STUDIO'} />
               <span className="text-[10px] font-bold uppercase tracking-wider">Студия</span>
           </button>
           <button 
             onClick={() => { triggerHaptic('selection'); setActiveTab('WARDROBE'); }}
             className={`flex flex-col items-center justify-center gap-1 ${activeTab === 'WARDROBE' ? 'text-amber-500' : 'text-neutral-500'}`}
           >
-              <span className="text-lg">👗</span>
+              <IconWardrobe className="w-6 h-6" filled={activeTab === 'WARDROBE'} />
               <span className="text-[10px] font-bold uppercase tracking-wider">Гардероб</span>
           </button>
           <button 
             onClick={() => { triggerHaptic('selection'); setActiveTab('PROFILE'); }}
             className={`flex flex-col items-center justify-center gap-1 ${activeTab === 'PROFILE' ? 'text-amber-500' : 'text-neutral-500'}`}
           >
-              <span className="text-lg">👤</span>
+              <IconProfile className="w-6 h-6" filled={activeTab === 'PROFILE'} />
               <span className="text-[10px] font-bold uppercase tracking-wider">Профиль</span>
           </button>
       </nav>
