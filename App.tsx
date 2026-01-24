@@ -62,6 +62,11 @@ const App: React.FC = () => {
   const [showGuestLockModal, setShowGuestLockModal] = useState(false);
   const [showProInfoModal, setShowProInfoModal] = useState(false);
   
+  // Payment Pending Logic
+  const [pendingPaymentId, setPendingPaymentId] = useState<string | null>(null);
+  const [isPollingPayment, setIsPollingPayment] = useState(false);
+  const paymentPollInterval = useRef<any>(null);
+
   // Data State
   const [originalImage, setOriginalImage] = useState<string | null>(null);
   const [currentImage, setCurrentImage] = useState<string | null>(null);
@@ -292,6 +297,52 @@ const App: React.FC = () => {
      setShowPaymentModal(true);
   }, []);
 
+  // Poll for payment success when pendingPaymentId is set
+  useEffect(() => {
+    if (!pendingPaymentId) {
+        if (paymentPollInterval.current) clearInterval(paymentPollInterval.current);
+        setIsPollingPayment(false);
+        return;
+    }
+
+    setIsPollingPayment(true);
+    paymentPollInterval.current = setInterval(async () => {
+        try {
+            const isPaid = await checkPaymentStatus(pendingPaymentId);
+            if (isPaid) {
+                await processSuccessfulPayment(pendingPaymentId);
+            }
+        } catch (e) {
+            console.error("Poll failed", e);
+        }
+    }, 3000); // Check every 3 seconds
+
+    return () => clearInterval(paymentPollInterval.current);
+  }, [pendingPaymentId]);
+
+  const processSuccessfulPayment = async (paymentId: string) => {
+      if (!user) return;
+      clearInterval(paymentPollInterval.current);
+      
+      triggerHaptic('success');
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 30);
+      const expiresIso = expiresAt.toISOString();
+
+      await storageService.setProStatus(user.id, true, expiresIso);
+      
+      const updatedUser = { ...user, subscriptionExpiresAt: expiresIso };
+      setUser(updatedUser);
+      localStorage.setItem('stylevision_current_user', JSON.stringify(updatedUser));
+      
+      setPendingPaymentId(null);
+      localStorage.removeItem('pending_payment_id');
+      
+      setShowPaymentModal(false);
+      setIsPro(true);
+      alert(`Оплата прошла успешно! AI+ режим активирован до ${new Date(expiresIso).toLocaleDateString()}`);
+  };
+
   const loadUserData = async (userId: number) => {
     try {
         const [savedHistory, proStatus] = await Promise.all([
@@ -301,37 +352,21 @@ const App: React.FC = () => {
         
         setHistory(savedHistory);
 
-        // Check Pending Payment logic
-        const pendingPaymentId = localStorage.getItem('pending_payment_id');
-        if (pendingPaymentId) {
-            setProcessingMessage('Проверка платежа...');
-            const isPaid = await checkPaymentStatus(pendingPaymentId);
-            
+        // Check if there was a pending payment from a reload
+        const storedPendingId = localStorage.getItem('pending_payment_id');
+        if (storedPendingId) {
+            setPendingPaymentId(storedPendingId);
+            // It will automatically be picked up by the useEffect above
+            // But we also do an immediate check
+            const isPaid = await checkPaymentStatus(storedPendingId);
             if (isPaid) {
-                triggerHaptic('success');
-                const expiresAt = new Date();
-                expiresAt.setDate(expiresAt.getDate() + 30);
-                const expiresIso = expiresAt.toISOString();
-
-                await storageService.setProStatus(userId, true, expiresIso);
-                
-                if (user) {
-                    const updatedUser = { ...user, subscriptionExpiresAt: expiresIso };
-                    setUser(updatedUser);
-                    localStorage.setItem('stylevision_current_user', JSON.stringify(updatedUser));
-                }
-                alert(`Оплата прошла успешно! AI+ режим активирован до ${new Date(expiresIso).toLocaleDateString()}`);
-                setShowPaymentModal(false);
-                setIsPro(true);
+                processSuccessfulPayment(storedPendingId);
             }
-            localStorage.removeItem('pending_payment_id');
         } else {
             setIsPro(proStatus);
         }
     } catch (e) {
         console.error("Failed to load user extra data", e);
-        // We don't throw here to prevent blocking the app login, 
-        // as history failure shouldn't stop the user from using the app.
     }
   };
 
@@ -447,15 +482,35 @@ const App: React.FC = () => {
         const payment = await createPayment(globalConfig.price, globalConfig.productDescription || "Подписка StyleVision AI+ (1 месяц)");
         
         if (payment.confirmation && payment.confirmation.confirmation_url) {
-            window.location.href = payment.confirmation.confirmation_url;
+            const paymentUrl = payment.confirmation.confirmation_url;
+            
+            // Save pending ID
+            if (payment.id) {
+                localStorage.setItem('pending_payment_id', payment.id);
+                setPendingPaymentId(payment.id);
+            }
+
+            // Check if inside Telegram
+            const tg = (window as any).Telegram?.WebApp;
+            const isTelegram = !!tg?.initData;
+
+            if (isTelegram) {
+                // Open in External Browser to allow deep links (SberPay, etc)
+                tg.openLink(paymentUrl, { try_instant_view: false });
+            } else {
+                // Standard browser redirect
+                window.location.href = paymentUrl;
+            }
         } else {
              throw new Error("Не получена ссылка на оплату");
         }
     } catch (e: any) {
         console.error(e);
         triggerHaptic('error');
-        setIsProcessing(false);
         alert(`Ошибка оплаты: ${e.message}.`);
+        setPendingPaymentId(null);
+    } finally {
+        setIsProcessing(false);
     }
   };
 
@@ -632,6 +687,13 @@ const App: React.FC = () => {
           setShowProInfoModal(true);
       }
   };
+
+  const cancelPendingPayment = () => {
+      setPendingPaymentId(null);
+      localStorage.removeItem('pending_payment_id');
+      clearInterval(paymentPollInterval.current);
+      setShowPaymentModal(false);
+  }
 
   // 1. Loading Screen (Replaces old spinner)
   if (isLoading) {
@@ -968,42 +1030,69 @@ const App: React.FC = () => {
                             <span className="font-serif text-3xl text-amber-500 italic">S</span>
                         </div>
                     </div>
-                    <h2 className="text-2xl font-serif text-white mb-2">StyleVision AI+ (1 месяц)</h2>
                     
-                    <div className="bg-neutral-900/50 rounded-xl p-4 border border-neutral-800 mb-6">
-                        <div className="flex justify-between items-center mb-3 pb-3 border-b border-neutral-800">
-                            <span className="text-neutral-400 text-sm">Стоимость</span>
-                            <span className="text-xl font-bold text-white">{globalConfig.price} ₽</span>
-                        </div>
-                        <div className="text-left text-xs text-neutral-300 space-y-2">
-                           {globalConfig.productDescription ? (
-                               <p className="whitespace-pre-line leading-relaxed">{globalConfig.productDescription}</p>
-                           ) : (
-                               <>
-                                <p>• Безлимитная генерация образов на 30 дней</p>
-                                <p>• Приоритетная обработка (без очереди)</p>
-                                <p>• Доступ к функции примерки (Virtual Try-On)</p>
-                                </>
-                           )}
-                        </div>
-                    </div>
+                    {/* CONDITIONAL CONTENT: Either Normal or Pending */}
+                    {!pendingPaymentId ? (
+                        <>
+                            <h2 className="text-2xl font-serif text-white mb-2">StyleVision AI+ (1 месяц)</h2>
+                            
+                            <div className="bg-neutral-900/50 rounded-xl p-4 border border-neutral-800 mb-6">
+                                <div className="flex justify-between items-center mb-3 pb-3 border-b border-neutral-800">
+                                    <span className="text-neutral-400 text-sm">Стоимость</span>
+                                    <span className="text-xl font-bold text-white">{globalConfig.price} ₽</span>
+                                </div>
+                                <div className="text-left text-xs text-neutral-300 space-y-2">
+                                {globalConfig.productDescription ? (
+                                    <p className="whitespace-pre-line leading-relaxed">{globalConfig.productDescription}</p>
+                                ) : (
+                                    <>
+                                        <p>• Безлимитная генерация образов на 30 дней</p>
+                                        <p>• Приоритетная обработка (без очереди)</p>
+                                        <p>• Доступ к функции примерки (Virtual Try-On)</p>
+                                        </>
+                                )}
+                                </div>
+                            </div>
 
-                    <button 
-                        onClick={initiatePayment}
-                        disabled={isProcessing}
-                        className="w-full bg-amber-600 hover:bg-amber-500 text-black font-bold py-4 rounded-xl transition-all flex items-center justify-center gap-2"
-                    >
-                        {isProcessing ? (
-                            <div className="animate-spin w-5 h-5 border-2 border-black border-t-transparent rounded-full"></div>
-                        ) : (
-                            <><span>Оплатить через</span><span className="font-bold">ЮKassa</span></>
-                        )}
-                    </button>
-                    
-                    {/* Legal Text with Link */}
-                    <p className="mt-4 text-[10px] text-neutral-500">
-                       Нажимая кнопку, вы соглашаетесь с условиями <a href="https://stylevision.fun/offer.html" target="_blank" rel="noopener noreferrer" className="text-amber-600 hover:underline">публичной оферты</a>.
-                    </p>
+                            <button 
+                                onClick={initiatePayment}
+                                disabled={isProcessing}
+                                className="w-full bg-amber-600 hover:bg-amber-500 text-black font-bold py-4 rounded-xl transition-all flex items-center justify-center gap-2"
+                            >
+                                {isProcessing ? (
+                                    <div className="animate-spin w-5 h-5 border-2 border-black border-t-transparent rounded-full"></div>
+                                ) : (
+                                    <><span>Оплатить через</span><span className="font-bold">ЮKassa</span></>
+                                )}
+                            </button>
+                            
+                            <p className="mt-4 text-[10px] text-neutral-500">
+                            Нажимая кнопку, вы соглашаетесь с условиями <a href="https://stylevision.fun/offer.html" target="_blank" rel="noopener noreferrer" className="text-amber-600 hover:underline">публичной оферты</a>.
+                            </p>
+                        </>
+                    ) : (
+                        <div className="animate-fade-in">
+                            <h2 className="text-xl font-serif text-white mb-4">Ожидание оплаты...</h2>
+                            <p className="text-sm text-neutral-400 mb-6">
+                                Страница оплаты открыта в браузере. Мы автоматически активируем подписку, как только банк подтвердит платеж.
+                            </p>
+                            
+                            <div className="w-full flex justify-center mb-6">
+                                <div className="flex gap-2 items-center">
+                                   <div className="w-3 h-3 bg-amber-500 rounded-full animate-bounce"></div>
+                                   <div className="w-3 h-3 bg-amber-500 rounded-full animate-bounce delay-100"></div>
+                                   <div className="w-3 h-3 bg-amber-500 rounded-full animate-bounce delay-200"></div>
+                                </div>
+                            </div>
+
+                            <button 
+                                onClick={cancelPendingPayment}
+                                className="text-xs text-neutral-500 hover:text-white border-b border-neutral-700 hover:border-white pb-0.5 transition-all"
+                            >
+                                Отменить и попробовать снова
+                            </button>
+                        </div>
+                    )}
 
                     {/* Mobile Contacts Section in Payment Modal */}
                     <div className="mt-6 border-t border-neutral-800 pt-4 text-[10px] text-neutral-500 space-y-2">
