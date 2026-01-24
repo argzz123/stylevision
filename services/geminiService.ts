@@ -358,7 +358,8 @@ export const getStyleRecommendations = async (
   analysis: UserAnalysis, 
   stores: Store[],
   preferences: StylePreferences,
-  onStatusUpdate?: (msg: string) => void
+  onStatusUpdate?: (msg: string) => void,
+  count: number = 15 // Increased default to 15
 ): Promise<StyleRecommendation[]> => {
 
   if (IS_DEMO_MODE) {
@@ -376,7 +377,7 @@ export const getStyleRecommendations = async (
       properties: {
         id: { type: Type.STRING },
         title: { type: Type.STRING },
-        description: { type: Type.STRING },
+        description: { type: Type.STRING, description: "Explain WHY this specific look suits the user's body type/color" },
         rationale: { type: Type.STRING },
         colorPalette: { type: Type.ARRAY, items: { type: Type.STRING } },
         items: {
@@ -415,16 +416,17 @@ export const getStyleRecommendations = async (
       const prompt = `
         ROLE: Professional AI Stylist.
         CLIENT: ${analysis.gender}, ${analysis.bodyType}, ${analysis.seasonalColor}.
-        REQUEST: Create 4 stylish TOTAL LOOKS for Season: ${preferences.season}, Occasion: ${preferences.occasion}.
+        REQUEST: Create ${count} distinct, stylish TOTAL LOOKS for Season: ${preferences.season}, Occasion: ${preferences.occasion}.
         
         CRITICAL INSTRUCTION:
-        - You MUST return 4 distinct looks.
+        - You MUST return exactly ${count} distinct looks.
+        - In the 'description' field, briefly explain WHY this look fits this specific client (e.g., "Suits hourglass shape because...", "Matches autumn color type because...").
         - If exact matches are hard to find, suggest generally available items fitting the style.
         - Target Stores: ${storeNames} (preferred but not limited to).
         - Language: Russian.
         
         OUTPUT FORMAT: JSON Array matching the schema exactly.
-        Generate IDs as 'style_1', 'style_2' etc.
+        Generate IDs as 'style_${Date.now()}_1', 'style_${Date.now()}_2' etc.
       `;
       return await attemptGeneration(prompt);
 
@@ -435,10 +437,11 @@ export const getStyleRecommendations = async (
           if (onStatusUpdate) onStatusUpdate("Уточняем детали стиля (повторная генерация)...");
           
           const safePrompt = `
-            Task: Create 4 generic fashion outfits for ${analysis.gender} suitable for ${preferences.occasion}.
+            Task: Create ${Math.min(count, 5)} generic fashion outfits for ${analysis.gender} suitable for ${preferences.occasion}.
             Language: Russian.
             Return JSON Array matching schema.
-            Do not use search tools, just use your fashion knowledge.
+            Include a short description of why it fits in the 'description' field.
+            Do not use search tools.
           `;
           
           const response = await callGeminiProxy(
