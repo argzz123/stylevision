@@ -557,19 +557,21 @@ export const tryOnWardrobeItems = async (
     }
 
     const prompt = `
-        TASK: High-Fidelity Virtual Try-On.
-        Input 1 is the MODEL (Person).
-        Inputs 2 to ${itemIndex} are CLOTHING ITEMS from the user's wardrobe.
+        CRITICAL TASK: VIRTUAL TRY-ON WITH 100% IDENTITY PRESERVATION.
         
-        ACTION: Dress the MODEL in the provided CLOTHING ITEMS.
+        INPUTS:
+        - Image 1: The MODEL (Person).
+        - Images 2-${itemIndex}: CLOTHING ITEMS to be worn.
         
-        STRICT CONSTRAINTS:
-        1. PRESERVE FACIAL IDENTITY 100%. Do not change the face.
-        2. PRESERVE BODY POSE 100%. Do not change the pose.
-        3. Replace the model's current outfit with the provided wardrobe items.
-        4. If multiple items are provided (e.g. top and bottom), combine them into a cohesive outfit.
-        5. Ensure realistic fabric physics, lighting, and shadows matching the original photo.
-        6. Output High Resolution Photorealistic Image.
+        MANDATORY RULES (STRICT ENFORCEMENT):
+        1. DO NOT GENERATE A NEW FACE. YOU MUST KEEP THE ORIGINAL FACE PIXEL-PERFECT.
+        2. DO NOT CHANGE THE BODY SHAPE OR POSE.
+        3. ACT AS A TEXTURE MAPPER: Only replace the pixels of the model's current clothes with the provided wardrobe items.
+        4. IF THE FACE CHANGES EVEN SLIGHTLY, THE TASK IS FAILED.
+        5. Composite the provided items onto the body naturally, respecting lighting and shadows.
+        
+        OUTPUT:
+        - A photorealistic image of the ORIGINAL MODEL wearing the NEW CLOTHES.
     `;
 
     parts.push({ text: prompt });

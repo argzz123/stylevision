@@ -18,29 +18,36 @@ const MODERATOR_ID = 999999;
 
 const FREE_LIMIT = 2; 
 
-// Icons Components
+// --- REFINED ICONS ---
+
 const IconStudio = ({ className, filled }: { className?: string, filled?: boolean }) => (
     <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M9.66 7.22C10.09 3.52 13.91 3.52 14.34 7.22C14.71 10.43 17.57 13.29 20.78 13.66C24.48 14.09 24.48 17.91 20.78 18.34C17.57 18.71 14.71 21.57 14.34 24.78C13.91 28.48 10.09 28.48 9.66 24.78C9.29 21.57 6.43 18.71 3.22 18.34C-0.48 17.91 -0.48 14.09 3.22 13.66C6.43 13.29 9.29 10.43 9.66 7.22Z" stroke="currentColor" strokeWidth={filled ? "0" : "1.5"} fill={filled ? "currentColor" : "none"} transform="scale(0.6) translate(8,8)"/>
-        <path d="M12 2L12.5 4.5M12 22L11.5 19.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-        <path d="M22 12L19.5 11.5M2 12L4.5 12.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-        <rect x="7" y="7" width="10" height="10" rx="3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-        <path d="M10 10L14 14M14 10L10 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M12 2L12 4M12 20L12 22M4 12L2 12M22 12L20 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+        <path d="M19.07 4.93L17.66 6.34M6.34 17.66L4.93 19.07M19.07 19.07L17.66 17.66M6.34 6.34L4.93 4.93" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+        {/* Hanger Shape */}
+        <path d="M12 7C12 7 7 10 7 13C7 15 9 17 12 17C15 17 17 15 17 13C17 10 12 7 12 7Z" stroke="currentColor" strokeWidth="1.5" fill={filled ? "currentColor" : "none"} />
+        <path d="M12 7V5C12 5 12 4 13 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
     </svg>
 );
 
 const IconWardrobe = ({ className, filled }: { className?: string, filled?: boolean }) => (
     <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M20.9 7.6C20.7 7.1 20.3 6.7 19.8 6.5L14 4.1C13.4 3.9 12.7 3.9 12.1 4.1L6.2 6.5C5.7 6.7 5.3 7.1 5.1 7.6L3.3 12H20.7L18.9 7.6Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-        <path d="M3.3 12H20.7V19C20.7 20.1 19.8 21 18.7 21H5.3C4.2 21 3.3 20.1 3.3 19V12Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-        <path d="M12 4V21" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        {/* Cabinet Frame */}
+        <rect x="4" y="3" width="16" height="18" rx="1" stroke="currentColor" strokeWidth="1.5" />
+        {/* Center Line */}
+        <path d="M12 3V21" stroke="currentColor" strokeWidth="1.5" />
+        {/* Handles */}
+        <circle cx="10" cy="12" r="1" fill={filled ? "currentColor" : "currentColor"} />
+        <circle cx="14" cy="12" r="1" fill={filled ? "currentColor" : "currentColor"} />
+        {/* Legs */}
+        <path d="M5 21V23M19 21V23" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
     </svg>
 );
 
 const IconProfile = ({ className, filled }: { className?: string, filled?: boolean }) => (
     <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12 12C14.7614 12 17 9.76142 17 7C17 4.23858 14.7614 2 12 2C9.23858 2 7 4.23858 7 7C7 9.76142 9.23858 12 12 12Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-        <path d="M20.59 22C20.59 18.13 16.746 15 12 15C7.254 15 3.41 18.13 3.41 22" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="1.5" fill={filled ? "currentColor" : "none"} />
+        <path d="M4 20C4 16 8 15 12 15C16 15 20 16 20 20" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
     </svg>
 );
 
