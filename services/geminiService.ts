@@ -1,6 +1,6 @@
 
 import { Type, Schema } from "@google/genai";
-import { UserAnalysis, StyleRecommendation, AnalysisMode, Store, StylePreferences, ShoppingProduct } from "../types";
+import { UserAnalysis, StyleRecommendation, AnalysisMode, Store, StylePreferences, ShoppingProduct, UserProfilePreferences } from "../types";
 import { storageService } from "./storageService";
 
 // --- DEMO MODE CONFIGURATION ---
@@ -358,7 +358,8 @@ export const getStyleRecommendations = async (
   analysis: UserAnalysis, 
   stores: Store[],
   preferences: StylePreferences,
-  onStatusUpdate?: (msg: string) => void
+  onStatusUpdate?: (msg: string) => void,
+  userProfile?: UserProfilePreferences
 ): Promise<StyleRecommendation[]> => {
 
   if (IS_DEMO_MODE) {
@@ -369,6 +370,18 @@ export const getStyleRecommendations = async (
   const activeStores = stores.filter(s => s.isSelected);
   const storeNames = activeStores.length > 0 ? activeStores.map(s => s.name).join(', ') : 'Popular Fashion Stores';
   
+  // -- PROFILE INJECTION START --
+  let profileContext = "";
+  if (userProfile) {
+      if (userProfile.favoriteStyles && userProfile.favoriteStyles.trim()) {
+          profileContext += `\nUSER FAVORITES/PREFERENCES: ${userProfile.favoriteStyles}\n`;
+      }
+      if (userProfile.taboos && userProfile.taboos.trim()) {
+          profileContext += `\nUSER TABOOS (DO NOT SUGGEST): ${userProfile.taboos}\n`;
+      }
+  }
+  // -- PROFILE INJECTION END --
+
   const schema: Schema = {
     type: Type.ARRAY,
     items: {
@@ -416,11 +429,14 @@ export const getStyleRecommendations = async (
         ROLE: Professional AI Stylist.
         CLIENT: ${analysis.gender}, ${analysis.bodyType}, ${analysis.seasonalColor}.
         REQUEST: Create 4 stylish TOTAL LOOKS for Season: ${preferences.season}, Occasion: ${preferences.occasion}.
+        ${profileContext}
         
         CRITICAL INSTRUCTION:
         - You MUST return 4 distinct looks.
         - If exact matches are hard to find, suggest generally available items fitting the style.
         - Target Stores: ${storeNames} (preferred but not limited to).
+        - STRICTLY RESPECT TABOOS: Do not suggest items listed in the "User Taboos" section if provided.
+        - INCORPORATE FAVORITES: Try to align with "User Favorites" if they fit the occasion.
         - Language: Russian.
         
         OUTPUT FORMAT: JSON Array matching the schema exactly.
@@ -437,6 +453,7 @@ export const getStyleRecommendations = async (
           const safePrompt = `
             Task: Create 4 generic fashion outfits for ${analysis.gender} suitable for ${preferences.occasion}.
             Language: Russian.
+            ${profileContext}
             Return JSON Array matching schema.
             Do not use search tools, just use your fashion knowledge.
           `;
