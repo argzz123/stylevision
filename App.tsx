@@ -14,6 +14,7 @@ import { triggerHaptic } from './utils/haptics'; // Haptics Import
 
 // ADMIN ID CONSTANT (Array)
 const ADMIN_IDS = [643780299, 1613288376];
+const MODERATOR_ID = 999999; // Special ID used in LoginScreen for moderator
 
 const FREE_LIMIT = 2; // Max generations per 5 hours
 
@@ -336,6 +337,8 @@ const App: React.FC = () => {
 
   const checkLimit = async (): Promise<boolean> => {
      if (!user) return false;
+     
+     // Note: Moderator will hit this limit just like a normal user to test payment
      if (isPro) return true;
 
      const count = await storageService.getRecentGenerationsCount(user.id, 5); 
@@ -349,7 +352,7 @@ const App: React.FC = () => {
 
   const saveToHistory = async (img: string, styleName: string) => {
     if (!originalImage || !analysis || !user) return;
-
+    
     try {
         const newItem: HistoryItem = {
           id: Date.now().toString(),
@@ -648,7 +651,8 @@ const App: React.FC = () => {
   }
 
   // 3. Maintenance Mode (Block non-admins)
-  if (globalConfig.maintenanceMode && !isAdmin(user.id)) {
+  // Moderator bypasses maintenance mode to test features
+  if (globalConfig.maintenanceMode && !isAdmin(user.id) && user.id !== MODERATOR_ID) {
       return (
           <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center p-6 text-center animate-fade-in">
               <div className="w-24 h-24 bg-yellow-900/20 border border-yellow-600/50 rounded-full flex items-center justify-center mb-8">

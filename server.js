@@ -7,8 +7,8 @@ const path = require('path'); // Импорт path для работы с пут
 const app = express();
 
 // Настройки магазина
-const SHOP_ID = '1223028';
-const SECRET_KEY = 'test_epdm18C2SIOTlmED5m05Q-jXQDTsgJJK28m8JwdxlBM';
+const SHOP_ID = '1254700';
+const SECRET_KEY = 'test_iCFbKUwMgGqxOuPZ23LbXv--BPh8oDZEG_UJ2wCLHaw';
 
 // Увеличиваем лимит payload для приема больших картинок (Base64)
 app.use(express.json({ limit: '50mb' }));

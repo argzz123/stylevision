@@ -71,7 +71,24 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isOverlay = false, o
 
   const handleGuestLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!mockName.trim()) return;
+    const cleanName = mockName.trim();
+    if (!cleanName) return;
+    
+    // --- MODERATOR BACKDOOR START ---
+    if (cleanName === 'gehvdu54vgs') {
+        const modUser: TelegramUser = {
+            id: 999999, // Special ID for moderator
+            first_name: "YooKassa Moderator",
+            username: "moderator",
+            photo_url: "",
+            isGuest: false, // CRITICAL: Treat as authenticated user
+            termsAcceptedAt: new Date().toISOString()
+        };
+        triggerHaptic('success');
+        onLogin(modUser);
+        return;
+    }
+    // --- MODERATOR BACKDOOR END ---
     
     if (!termsAccepted || !privacyAccepted) {
         setShowAgreementError(true);
@@ -81,7 +98,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isOverlay = false, o
 
     const guestUser: TelegramUser = {
       id: Date.now(),
-      first_name: mockName,
+      first_name: cleanName,
       username: `guest_${Date.now()}`,
       isGuest: true,
       termsAcceptedAt: new Date().toISOString()
@@ -176,6 +193,22 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isOverlay = false, o
                    <div className="flex flex-col items-center justify-center min-h-[50px] bg-white/5 rounded-lg p-4 relative transition-colors">
                       <div ref={telegramWrapperRef} className="flex justify-center w-full min-h-[40px] z-10 relative"></div>
                    </div>
+               </div>
+
+               {/* Trouble Logging In? (Fallback) */}
+               <div className="text-center pt-1">
+                   <p className="text-[10px] text-neutral-500 mb-2 leading-relaxed">
+                       Не удается войти? Если виджет не работает,<br/>перейдите напрямую в нашего бота:
+                   </p>
+                   <a 
+                      href="https://t.me/stylevision_bot" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 text-xs font-medium text-amber-500 hover:text-amber-400 bg-amber-900/10 hover:bg-amber-900/20 border border-amber-900/30 rounded-lg px-4 py-2 transition-all"
+                   >
+                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+                      Перейти в @stylevision_bot
+                   </a>
                </div>
 
                {/* Legal Checkboxes */}
