@@ -46,7 +46,7 @@ const base64ToBlob = (base64: string): Blob | null => {
 };
 
 // Helper: Upload image to Supabase Storage and get URL
-const uploadImageToStorage = async (userId: number, base64Image: string | null, type: 'orig' | 'res' | 'story'): Promise<string | null> => {
+const uploadImageToStorage = async (userId: number, base64Image: string | null, type: 'orig' | 'res' | 'temp'): Promise<string | null> => {
     // 1. If it's already a URL (starts with http) or null, return as is
     if (!base64Image || base64Image.startsWith('http')) {
         return base64Image; 
@@ -284,9 +284,9 @@ export const storageService = {
     }
   },
   
-  // --- STORY UPLOAD ---
-  uploadStoryImage: async (userId: number, base64Image: string): Promise<string | null> => {
-      return uploadImageToStorage(userId, base64Image, 'story');
+  // --- PUBLIC DOWNLOAD UPLOAD ---
+  uploadPublicImage: async (userId: number, base64Image: string): Promise<string | null> => {
+      return uploadImageToStorage(userId, base64Image, 'temp');
   },
 
   // --- GLOBAL SYSTEM CONFIG ---
