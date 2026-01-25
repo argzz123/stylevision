@@ -116,8 +116,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isOverlay = false, o
   };
 
   const containerClasses = isOverlay 
-    ? "fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex flex-col items-center justify-center p-4"
-    : "min-h-screen w-full bg-[#050505] flex flex-col items-center justify-center p-4 relative overflow-hidden";
+    ? "fixed inset-0 z-[100] bg-black/50 dark:bg-black/90 backdrop-blur-md flex flex-col items-center justify-center p-4 transition-colors"
+    : "min-h-screen w-full bg-white dark:bg-[#050505] flex flex-col items-center justify-center p-4 relative overflow-hidden transition-colors";
 
   const renderCheckbox = (id: string, checked: boolean, setter: (v: boolean) => void, label: React.ReactNode) => (
       <div className="flex items-start gap-3">
@@ -128,20 +128,20 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isOverlay = false, o
                 checked={checked}
                 onChange={(e) => { triggerHaptic('selection'); setter(e.target.checked); }}
                 className={`
-                    appearance-none w-5 h-5 border rounded bg-neutral-900 
-                    checked:bg-amber-600 checked:border-amber-600 
+                    appearance-none w-5 h-5 border rounded bg-gray-100 dark:bg-neutral-900 
+                    checked:bg-tangerine-500 dark:checked:bg-amber-600 checked:border-tangerine-500 dark:checked:border-amber-600 
                     cursor-pointer transition-colors shrink-0 z-10
-                    ${showAgreementError && !checked ? 'border-red-500' : 'border-neutral-700'}
+                    ${showAgreementError && !checked ? 'border-red-500' : 'border-gray-300 dark:border-neutral-700'}
                 `} 
             />
             <svg className={`
-                absolute top-0.5 left-0 w-5 h-5 pointer-events-none text-black transition-opacity z-20 p-0.5
+                absolute top-0.5 left-0 w-5 h-5 pointer-events-none text-white dark:text-black transition-opacity z-20 p-0.5
                 ${checked ? 'opacity-100' : 'opacity-0'}
             `} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="20 6 9 17 4 12"></polyline>
             </svg>
           </div>
-          <label htmlFor={id} className={`text-xs cursor-pointer select-none pt-0.5 leading-tight ${showAgreementError && !checked ? 'text-red-400' : 'text-neutral-400'}`}>
+          <label htmlFor={id} className={`text-xs cursor-pointer select-none pt-0.5 leading-tight ${showAgreementError && !checked ? 'text-red-500' : 'text-gray-600 font-medium dark:text-neutral-400'}`}>
               {label}
           </label>
       </div>
@@ -151,34 +151,34 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isOverlay = false, o
     <div className={containerClasses}>
       {!isOverlay && (
         <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0 pointer-events-none">
-            <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-amber-900/10 rounded-full blur-[120px]"></div>
-            <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-blue-900/10 rounded-full blur-[120px]"></div>
+            <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-tangerine-100/50 dark:bg-amber-900/10 rounded-full blur-[120px]"></div>
+            <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-blue-100/50 dark:bg-blue-900/10 rounded-full blur-[120px]"></div>
         </div>
       )}
       
       <div className="relative z-10 w-full max-w-md animate-fade-in-up">
          {!isOverlay && (
              <div className="text-center mb-10">
-                <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-amber-400 to-amber-700 p-[1px] shadow-2xl shadow-amber-900/30">
-                <div className="w-full h-full rounded-full bg-black flex items-center justify-center">
-                    <span className="font-serif text-4xl text-amber-500 italic">S</span>
+                <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-tangerine-400 to-tangerine-600 dark:from-amber-400 dark:to-amber-700 p-[1px] shadow-2xl shadow-tangerine-500/20 dark:shadow-amber-900/30">
+                <div className="w-full h-full rounded-full bg-white dark:bg-black flex items-center justify-center">
+                    <span className="font-serif text-4xl text-tangerine-500 dark:text-amber-500 italic">S</span>
                 </div>
                 </div>
-                <h1 className="text-4xl font-serif text-white mb-2 tracking-wide">
-                STYLE<span className="font-sans font-light text-neutral-500 text-lg ml-1">VISION</span>
+                <h1 className="text-4xl font-serif text-gray-900 dark:text-white mb-2 tracking-wide">
+                STYLE<span className="font-sans font-light text-gray-400 dark:text-neutral-500 text-lg ml-1">VISION</span>
                 </h1>
-                <p className="text-neutral-500 text-sm tracking-widest uppercase">Персональный ИИ Стилист</p>
+                <p className="text-gray-500 dark:text-neutral-500 text-sm tracking-widest uppercase">Персональный ИИ Стилист</p>
              </div>
          )}
 
-         <div className={`bg-[#0a0a0a] border border-neutral-800 rounded-2xl p-8 shadow-2xl ${isOverlay ? 'border-amber-600/30 shadow-amber-900/20' : ''}`}>
+         <div className={`bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-800 rounded-2xl p-8 shadow-2xl transition-colors ${isOverlay ? 'border-tangerine-200 dark:border-amber-600/30 shadow-tangerine-500/10 dark:shadow-amber-900/20' : ''}`}>
             {isOverlay && onCancel && (
-                <button onClick={onCancel} className="absolute top-4 right-4 text-neutral-500 hover:text-white">
+                <button onClick={onCancel} className="absolute top-4 right-4 text-gray-400 dark:text-neutral-500 hover:text-gray-900 dark:hover:text-white">
                     <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
             )}
 
-            <h2 className="text-xl font-serif text-white mb-2 text-center">
+            <h2 className="text-xl font-serif text-gray-900 dark:text-white mb-2 text-center">
                 {isOverlay ? 'Требуется авторизация' : 'Вход через Telegram'}
             </h2>
             
@@ -190,21 +190,21 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isOverlay = false, o
                        <div className="absolute inset-0 z-20 cursor-pointer" onClick={handleOverlayClick}></div>
                    )}
                    
-                   <div className="flex flex-col items-center justify-center min-h-[50px] bg-white/5 rounded-lg p-4 relative transition-colors">
+                   <div className="flex flex-col items-center justify-center min-h-[50px] bg-gray-50 dark:bg-white/5 rounded-lg p-4 relative transition-colors">
                       <div ref={telegramWrapperRef} className="flex justify-center w-full min-h-[40px] z-10 relative"></div>
                    </div>
                </div>
 
                {/* Trouble Logging In? (Fallback) */}
                <div className="text-center pt-1">
-                   <p className="text-[10px] text-neutral-500 mb-2 leading-relaxed">
+                   <p className="text-[10px] text-gray-600 font-medium dark:text-neutral-500 mb-2 leading-relaxed">
                        Не удается войти? Если виджет не работает,<br/>перейдите напрямую в нашего бота:
                    </p>
                    <a 
                       href="https://t.me/stylevision_bot" 
                       target="_blank" 
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 text-xs font-medium text-amber-500 hover:text-amber-400 bg-amber-900/10 hover:bg-amber-900/20 border border-amber-900/30 rounded-lg px-4 py-2 transition-all"
+                      className="inline-flex items-center gap-2 text-xs font-medium text-tangerine-600 dark:text-amber-500 hover:text-tangerine-500 dark:hover:text-amber-400 bg-tangerine-50 dark:bg-amber-900/10 hover:bg-tangerine-100 dark:hover:bg-amber-900/20 border border-tangerine-200 dark:border-amber-900/30 rounded-lg px-4 py-2 transition-all"
                    >
                       <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
                       Перейти в @stylevision_bot
@@ -212,10 +212,10 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isOverlay = false, o
                </div>
 
                {/* Legal Checkboxes */}
-               <div className={`space-y-3 p-4 rounded-lg border transition-all ${showAgreementError ? 'bg-red-900/10 border-red-500/50' : 'bg-neutral-900/50 border-neutral-800'}`}>
+               <div className={`space-y-3 p-4 rounded-lg border transition-all ${showAgreementError ? 'bg-red-50 dark:bg-red-900/10 border-red-300 dark:border-red-500/50' : 'bg-gray-50 dark:bg-neutral-900/50 border-gray-200 dark:border-neutral-800'}`}>
                    {showAgreementError && (
                        <div className="text-center mb-3">
-                           <span className="text-xs font-bold text-red-500 bg-red-900/20 px-2 py-1 rounded animate-pulse">
+                           <span className="text-xs font-bold text-red-600 dark:text-red-500 bg-red-100 dark:bg-red-900/20 px-2 py-1 rounded animate-pulse">
                                Необходимо принять условия
                            </span>
                        </div>
@@ -225,14 +225,14 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isOverlay = false, o
                        "check_terms", 
                        termsAccepted, 
                        setTermsAccepted, 
-                       <>Я принимаю условия <a href="/offer.html" target="_blank" rel="noopener noreferrer" className="text-amber-500 hover:text-amber-400 underline cursor-pointer">Публичной оферты</a></>
+                       <>Я принимаю условия <a href="/offer.html" target="_blank" rel="noopener noreferrer" className="text-tangerine-600 dark:text-amber-500 hover:text-tangerine-500 dark:hover:text-amber-400 underline cursor-pointer">Публичной оферты</a></>
                    )}
                    
                    {renderCheckbox(
                        "check_privacy", 
                        privacyAccepted, 
                        setPrivacyAccepted, 
-                       <>Я даю согласие на обработку персональных данных согласно <a href="/privacy.html" target="_blank" rel="noopener noreferrer" className="text-amber-500 hover:text-amber-400 underline cursor-pointer">Политике конфиденциальности</a></>
+                       <>Я даю согласие на обработку персональных данных согласно <a href="/privacy.html" target="_blank" rel="noopener noreferrer" className="text-tangerine-600 dark:text-amber-500 hover:text-tangerine-500 dark:hover:text-amber-400 underline cursor-pointer">Политике конфиденциальности</a></>
                    )}
                </div>
 
@@ -240,10 +240,10 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isOverlay = false, o
                    <>
                        <div className="relative py-2">
                           <div className="absolute inset-0 flex items-center">
-                             <div className="w-full border-t border-neutral-800"></div>
+                             <div className="w-full border-t border-gray-200 dark:border-neutral-800"></div>
                           </div>
                           <div className="relative flex justify-center text-xs uppercase">
-                             <span className="bg-[#0a0a0a] px-2 text-neutral-600">Или продолжить как гость</span>
+                             <span className="bg-white dark:bg-[#0a0a0a] px-2 text-gray-600 font-medium dark:text-neutral-600">Или продолжить как гость</span>
                           </div>
                        </div>
 
@@ -253,12 +253,12 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isOverlay = false, o
                             value={mockName}
                             onChange={(e) => setMockName(e.target.value)}
                             placeholder="Ваше имя"
-                            className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-4 py-3 text-white placeholder-neutral-600 focus:border-amber-600 focus:outline-none transition-colors"
+                            className="w-full bg-gray-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-lg px-4 py-3 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-neutral-600 focus:border-tangerine-500 dark:focus:border-amber-600 focus:outline-none transition-colors"
                           />
                           <button 
                             type="submit"
                             disabled={!mockName.trim()}
-                            className="w-full bg-white text-black font-bold py-3.5 rounded-xl hover:bg-neutral-200 transition-colors disabled:opacity-50 uppercase tracking-wider text-xs"
+                            className="w-full bg-black dark:bg-white text-white dark:text-black font-bold py-3.5 rounded-xl hover:bg-gray-800 dark:hover:bg-neutral-200 transition-colors disabled:opacity-50 uppercase tracking-wider text-xs"
                           >
                              Войти без Telegram
                           </button>
