@@ -8,7 +8,6 @@ export default {
     "./services/**/*.{js,ts,jsx,tsx}",
     "./api/**/*.{js,ts}"
   ],
-  darkMode: 'class', // Enabled manual dark mode toggling
   theme: {
     extend: {
       fontFamily: {
@@ -33,19 +32,6 @@ export default {
         pulse: {
           '0%, 100%': { opacity: '1' },
           '50%': { opacity: '.5' },
-        }
-      },
-      colors: {
-        // Defining custom tangerine for light mode
-        tangerine: {
-          50: '#fff7ed',
-          100: '#ffedd5',
-          200: '#fed7aa',
-          300: '#fdba74',
-          400: '#fb923c',
-          500: '#f97316', // Main Tangerine
-          600: '#ea580c',
-          700: '#c2410c',
         }
       }
     },
